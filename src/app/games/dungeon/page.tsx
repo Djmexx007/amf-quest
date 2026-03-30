@@ -40,10 +40,11 @@ export default function DungeonPage() {
   const [branchColor, setBranchColor] = useState('#D4A843')
   const [allQuestions, setAllQuestions] = useState<Question[]>([])
   const [usedIds, setUsedIds] = useState<Set<string>>(new Set())
-  const [result, setResult] = useState<{ xp: number; coins: number; levelUp: boolean } | null>(null)
+  const [result, setResult] = useState<{ xp: number; coins: number; levelUp: boolean; breakdown?: import('@/lib/xp-calculator').BonusBreakdown; rankUp?: { name: string; bonusCoins: number; bonusXP: number } | null } | null>(null)
   const [unlockedAchievements, setUnlockedAchievements] = useState<{ slug: string; title: string; xp: number; coins: number }[]>([])
   const [treasureMsg, setTreasureMsg] = useState('')
   const [bossHp, setBossHp] = useState(3)
+  const [startTime] = useState(() => Date.now())
 
   useEffect(() => {
     Promise.all([
@@ -124,12 +125,15 @@ export default function DungeonPage() {
 
   async function finishGame(victory: boolean) {
     const finalScore = victory ? score + 500 : Math.round(score * 0.5)
+    const elapsed = (Date.now() - startTime) / 1000
+    const targetTime = 5 * 60 // 5 min par run = temps rapide
+    const timeBonusPct = victory ? Math.max(0, Math.min(1, 1 - elapsed / targetTime)) : 0
     const res = await fetch('/api/game/complete', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ game_type: 'dungeon', score: finalScore, questions_total: total, questions_correct: correct, best_streak: 0, avg_time_seconds: 30, difficulty: 2 }),
+      body: JSON.stringify({ game_type: 'dungeon', score: finalScore, questions_total: total, questions_correct: correct, best_streak: 0, avg_time_seconds: Math.round(elapsed / Math.max(total, 1)), difficulty: 2, time_bonus_pct: timeBonusPct }),
     })
     const data = await res.json()
-    setResult({ xp: data.xp_earned ?? 0, coins: data.coins_earned ?? 0, levelUp: data.level_up ?? false })
+    setResult({ xp: data.xp_earned ?? 0, coins: data.coins_earned ?? 0, levelUp: data.level_up ?? false, breakdown: data.bonus_breakdown, rankUp: data.rank_up_reward })
     if (data.achievements_unlocked?.length > 0) setUnlockedAchievements(data.achievements_unlocked)
     setPhase('result')
   }
@@ -268,7 +272,9 @@ export default function DungeonPage() {
           xpEarned={result.xp} coinsEarned={result.coins} levelUp={result.levelUp}
           branchColor={branchColor}
           onReplay={() => { setRooms(generateDungeon()); setHp(100); setScore(0); setCorrect(0); setTotal(0); setCurrentRoom(0); setBossHp(3); setUsedIds(new Set()); setPhase('map') }}
-          gameLabel="Donjon" />
+          gameLabel="Donjon"
+          bonusBreakdown={result.breakdown}
+          rankUpReward={result.rankUp} />
       )}
       <AchievementUnlockToast achievements={unlockedAchievements} onDone={() => setUnlockedAchievements([])} />
     </GameShell>

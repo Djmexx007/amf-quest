@@ -30,7 +30,7 @@ export default function SpeedSortPage() {
   const [correct, setCorrect] = useState(0)
   const [total, setTotal] = useState(0)
   const [combo, setCombo] = useState(0)
-  const [result, setResult] = useState<{ xp: number; coins: number; levelUp: boolean } | null>(null)
+  const [result, setResult] = useState<{ xp: number; coins: number; levelUp: boolean; breakdown?: import('@/lib/xp-calculator').BonusBreakdown; rankUp?: { name: string; bonusCoins: number; bonusXP: number } | null } | null>(null)
   const [unlockedAchievements, setUnlockedAchievements] = useState<{ slug: string; title: string; xp: number; coins: number }[]>([])
   const [timeLeft, setTimeLeft] = useState(60)
   const [gameStarted, setGameStarted] = useState(false)
@@ -139,7 +139,7 @@ export default function SpeedSortPage() {
       body: JSON.stringify({ game_type: 'speed-sort', score, questions_total: total, questions_correct: correct, best_streak: combo, avg_time_seconds: 1, difficulty: 2 }),
     })
     const data = await res.json()
-    setResult({ xp: data.xp_earned ?? 0, coins: data.coins_earned ?? 0, levelUp: data.level_up ?? false })
+    setResult({ xp: data.xp_earned ?? 0, coins: data.coins_earned ?? 0, levelUp: data.level_up ?? false, breakdown: data.bonus_breakdown, rankUp: data.rank_up_reward })
     if (data.achievements_unlocked?.length > 0) setUnlockedAchievements(data.achievements_unlocked)
     setPhase('result')
   }
@@ -203,6 +203,7 @@ export default function SpeedSortPage() {
       {phase === 'result' && result && (
         <ResultScreen score={score} correct={correct} total={total}
           xpEarned={result.xp} coinsEarned={result.coins} levelUp={result.levelUp}
+          bonusBreakdown={result.breakdown} rankUpReward={result.rankUp}
           branchColor={branchColor} onReplay={() => setPhase('config')} gameLabel="Speed Sort" />
       )}
       <AchievementUnlockToast achievements={unlockedAchievements} onDone={() => setUnlockedAchievements([])} />

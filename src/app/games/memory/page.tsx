@@ -20,7 +20,7 @@ export default function MemoryPage() {
   const [matched, setMatched] = useState(0)
   const [timer, setTimer] = useState(0)
   const [branchColor, setBranchColor] = useState('#D4A843')
-  const [result, setResult] = useState<{ xp: number; coins: number; levelUp: boolean } | null>(null)
+  const [result, setResult] = useState<{ xp: number; coins: number; levelUp: boolean; breakdown?: import('@/lib/xp-calculator').BonusBreakdown; rankUp?: { name: string; bonusCoins: number; bonusXP: number } | null } | null>(null)
   const [unlockedAchievements, setUnlockedAchievements] = useState<{ slug: string; title: string; xp: number; coins: number }[]>([])
   const [locked, setLocked] = useState(false)
 
@@ -100,7 +100,7 @@ export default function MemoryPage() {
       body: JSON.stringify({ game_type: 'memory', score, questions_total: total, questions_correct: matchedPairs, best_streak: 0, avg_time_seconds: timer / total, difficulty: gridSize === '6x6' ? 3 : gridSize === '5x5' ? 2 : 1 }),
     })
     const data = await res.json()
-    setResult({ xp: data.xp_earned ?? 0, coins: data.coins_earned ?? 0, levelUp: data.level_up ?? false })
+    setResult({ xp: data.xp_earned ?? 0, coins: data.coins_earned ?? 0, levelUp: data.level_up ?? false, breakdown: data.bonus_breakdown, rankUp: data.rank_up_reward })
     if (data.achievements_unlocked?.length > 0) setUnlockedAchievements(data.achievements_unlocked)
     setPhase('result')
   }
@@ -165,6 +165,7 @@ export default function MemoryPage() {
       {phase === 'result' && result && (
         <ResultScreen score={Math.max(0, 100 - attempts * 2)} correct={matched} total={GRID_SIZES[gridSize]}
           xpEarned={result.xp} coinsEarned={result.coins} levelUp={result.levelUp}
+          bonusBreakdown={result.breakdown} rankUpReward={result.rankUp}
           branchColor={branchColor} onReplay={() => { setPhase('config'); setCards([]) }} gameLabel="Memory Match" />
       )}
       <AchievementUnlockToast achievements={unlockedAchievements} onDone={() => setUnlockedAchievements([])} />

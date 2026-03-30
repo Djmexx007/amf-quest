@@ -15,7 +15,9 @@ const CLASS_ICONS: Record<string, string> = {
 }
 
 export default function CharacterPanel({ character, branch }: Props) {
-  const xpPct = Math.min(100, Math.round((character.xp / character.xp_to_next_level) * 100))
+  const xpNeededForLevel = Math.round(500 * Math.pow(character.level, 1.4))
+  const xpInCurrentLevel = xpNeededForLevel - character.xp_to_next_level
+  const xpPct = Math.min(100, Math.max(0, Math.round((xpInCurrentLevel / xpNeededForLevel) * 100)))
   const accuracy = character.total_questions_answered > 0
     ? Math.round((character.total_correct_answers / character.total_questions_answered) * 100)
     : 0
@@ -61,10 +63,10 @@ export default function CharacterPanel({ character, branch }: Props) {
           <div className="flex justify-between text-xs text-gray-400 mb-1.5">
             <span>Expérience</span>
             <span style={{ color: branch.color }}>
-              {character.xp.toLocaleString()} / {character.xp_to_next_level.toLocaleString()} XP
+              {xpInCurrentLevel.toLocaleString()} / {xpNeededForLevel.toLocaleString()} XP
             </span>
           </div>
-          <ProgressBar value={character.xp} max={character.xp_to_next_level} color={branch.color} height={10} />
+          <ProgressBar value={xpInCurrentLevel} max={xpNeededForLevel} color={branch.color} height={10} />
           <p className="text-right text-xs text-gray-600 mt-1">{xpPct}% vers niveau {character.level + 1}</p>
         </div>
 

@@ -1,6 +1,6 @@
 import type { GameType } from '@/types'
 
-// XP per correct answer by game type and difficulty
+// XP per correct answer by game type
 const BASE_XP: Record<GameType, number> = {
   quiz: 30,
   dungeon: 50,
@@ -14,26 +14,63 @@ const BASE_XP: Record<GameType, number> = {
 
 const DIFF_MULTIPLIER = { 1: 1, 2: 1.5, 3: 2.5 }
 
+// Rank thresholds — bonus coins awarded on crossing these levels
+export const RANK_THRESHOLDS: Record<number, { name: string; bonusCoins: number; bonusXP: number }> = {
+  5:  { name: 'Initié',         bonusCoins: 200,  bonusXP: 300  },
+  10: { name: 'Intermédiaire',  bonusCoins: 400,  bonusXP: 600  },
+  15: { name: 'Avancé',         bonusCoins: 700,  bonusXP: 1000 },
+  20: { name: 'Expert',         bonusCoins: 1200, bonusXP: 1800 },
+  25: { name: 'Maître',         bonusCoins: 2000, bonusXP: 3000 },
+  30: { name: 'Légendaire',     bonusCoins: 3500, bonusXP: 5000 },
+}
+
+export interface BonusBreakdown {
+  base: number
+  difficulty_mult: number
+  accuracy_bonus: number       // 0 = none, 0.5 = +50%
+  streak_bonus: number         // 0–0.5
+  time_bonus: number           // 0–0.3
+  level_bonus: number          // 0–0.3
+  perfect: boolean
+}
+
 export function calcXP(
   gameType: GameType,
   correct: number,
   total: number,
   difficulty: 1 | 2 | 3 = 1,
   streak: number = 0,
-  timeBonusPct: number = 0   // 0–1 based on remaining time
-): number {
+  timeBonusPct: number = 0,
+  characterLevel: number = 1,
+): { xp: number; breakdown: BonusBreakdown } {
   const base = BASE_XP[gameType] ?? 30
   const diffMult = DIFF_MULTIPLIER[difficulty]
-  const accuracyBonus = total > 0 ? (correct / total) === 1 ? 1.5 : 1 : 1 // perfect score = +50%
-  const streakBonus = Math.min(streak * 0.05, 0.5)                          // up to +50% streak
-  const timeBonus = timeBonusPct * 0.3                                       // up to +30% time
+  const perfect = total > 0 && correct === total
+  const accuracyBonus = perfect ? 0.5 : 0              // +50% for perfect
+  const streakBonus = Math.min(streak * 0.05, 0.5)     // up to +50%
+  const timeBonus = Math.min(timeBonusPct, 1) * 0.3    // up to +30%
+  const levelBonus = Math.min((characterLevel - 1) * 0.01, 0.3) // +1%/level, max +30%
 
-  const raw = base * correct * diffMult * accuracyBonus * (1 + streakBonus + timeBonus)
-  return Math.round(raw)
+  const raw = base * correct * diffMult * (1 + accuracyBonus + streakBonus + timeBonus + levelBonus)
+  const xp = Math.round(raw)
+
+  return {
+    xp,
+    breakdown: {
+      base: Math.round(base * correct * diffMult),
+      difficulty_mult: diffMult,
+      accuracy_bonus: accuracyBonus,
+      streak_bonus: Math.round(streakBonus * 100) / 100,
+      time_bonus: Math.round(timeBonus * 100) / 100,
+      level_bonus: Math.round(levelBonus * 100) / 100,
+      perfect,
+    },
+  }
 }
 
-export function calcCoins(xp: number): number {
-  return Math.round(xp * 0.3)
+export function calcCoins(xp: number, characterLevel: number = 1): number {
+  const levelBonus = Math.min((characterLevel - 1) * 0.01, 0.3)
+  return Math.round(xp * 0.3 * (1 + levelBonus))
 }
 
 export function calcLevelFromXP(totalXP: number): { level: number; xpToNext: number } {

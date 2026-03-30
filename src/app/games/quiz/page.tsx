@@ -37,7 +37,7 @@ export default function QuizPage() {
   const [streak, setStreak] = useState(0)
   const [bestStreak, setBestStreak] = useState(0)
   const [totalTime, setTotalTime] = useState(0)
-  const [result, setResult] = useState<{ xp: number; coins: number; levelUp: boolean; newLevel?: number } | null>(null)
+  const [result, setResult] = useState<{ xp: number; coins: number; levelUp: boolean; newLevel?: number; breakdown?: import('@/lib/xp-calculator').BonusBreakdown; rankUp?: { name: string; bonusCoins: number; bonusXP: number } | null } | null>(null)
   const [unlockedAchievements, setUnlockedAchievements] = useState<{ slug: string; title: string; xp: number; coins: number }[]>([])
   const [branchColor, setBranchColor] = useState('#D4A843')
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -133,7 +133,7 @@ export default function QuizPage() {
       }),
     })
     const data = await res.json()
-    setResult({ xp: data.xp_earned ?? 0, coins: data.coins_earned ?? 0, levelUp: data.level_up ?? false, newLevel: data.new_level })
+    setResult({ xp: data.xp_earned ?? 0, coins: data.coins_earned ?? 0, levelUp: data.level_up ?? false, newLevel: data.new_level, breakdown: data.bonus_breakdown, rankUp: data.rank_up_reward })
     if (data.achievements_unlocked?.length > 0) setUnlockedAchievements(data.achievements_unlocked)
     setPhase('result')
   }
@@ -261,6 +261,8 @@ export default function QuizPage() {
           branchColor={branchColor}
           onReplay={() => { setPhase('config'); setQuestions([]) }}
           gameLabel="Quiz Éclair"
+          bonusBreakdown={result.breakdown}
+          rankUpReward={result.rankUp}
         />
       )}
     </GameShell>

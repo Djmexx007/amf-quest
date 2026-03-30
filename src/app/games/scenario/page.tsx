@@ -16,7 +16,7 @@ export default function ScenarioPage() {
   const [correct, setCorrect] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [branchColor, setBranchColor] = useState('#D4A843')
-  const [result, setResult] = useState<{ xp: number; coins: number; levelUp: boolean } | null>(null)
+  const [result, setResult] = useState<{ xp: number; coins: number; levelUp: boolean; breakdown?: import('@/lib/xp-calculator').BonusBreakdown; rankUp?: { name: string; bonusCoins: number; bonusXP: number } | null } | null>(null)
   const [unlockedAchievements, setUnlockedAchievements] = useState<{ slug: string; title: string; xp: number; coins: number }[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -54,7 +54,7 @@ export default function ScenarioPage() {
       body: JSON.stringify({ game_type: 'scenario', score, questions_total: questions.length, questions_correct: correct, best_streak: 0, avg_time_seconds: 30, difficulty: 2 }),
     })
     const data = await res.json()
-    setResult({ xp: data.xp_earned ?? 0, coins: data.coins_earned ?? 0, levelUp: data.level_up ?? false })
+    setResult({ xp: data.xp_earned ?? 0, coins: data.coins_earned ?? 0, levelUp: data.level_up ?? false, breakdown: data.bonus_breakdown, rankUp: data.rank_up_reward })
     if (data.achievements_unlocked?.length > 0) setUnlockedAchievements(data.achievements_unlocked)
   }
 
@@ -80,6 +80,7 @@ export default function ScenarioPage() {
     <GameShell title="Scénario Client" icon="👔" branchColor={branchColor}>
       <ResultScreen score={Math.round((correct/questions.length)*100)} correct={correct} total={questions.length}
         xpEarned={result.xp} coinsEarned={result.coins} levelUp={result.levelUp}
+        bonusBreakdown={result.breakdown} rankUpReward={result.rankUp}
         branchColor={branchColor}
         onReplay={() => { setQIndex(0); setCorrect(0); setSelectedId(null); setResult(null); setPhase('playing') }}
         gameLabel="Scénario Client" />

@@ -56,7 +56,7 @@ export default function DetectivePage() {
   const [falseAlarms, setFalseAlarms] = useState(0)
   const [revealed, setRevealed] = useState<string | null>(null)
   const [branchColor, setBranchColor] = useState('#D4A843')
-  const [result, setResult] = useState<{ xp: number; coins: number; levelUp: boolean } | null>(null)
+  const [result, setResult] = useState<{ xp: number; coins: number; levelUp: boolean; breakdown?: import('@/lib/xp-calculator').BonusBreakdown; rankUp?: { name: string; bonusCoins: number; bonusXP: number } | null } | null>(null)
   const [unlockedAchievements, setUnlockedAchievements] = useState<{ slug: string; title: string; xp: number; coins: number }[]>([])
   const [showAll, setShowAll] = useState(false)
 
@@ -93,7 +93,7 @@ export default function DetectivePage() {
       body: JSON.stringify({ game_type: 'detective', score, questions_total: currentCase.violations.length, questions_correct: found.size, best_streak: 0, avg_time_seconds: 60, difficulty: 3 }),
     })
     const data = await res.json()
-    setResult({ xp: data.xp_earned ?? 0, coins: data.coins_earned ?? 0, levelUp: data.level_up ?? false })
+    setResult({ xp: data.xp_earned ?? 0, coins: data.coins_earned ?? 0, levelUp: data.level_up ?? false, breakdown: data.bonus_breakdown, rankUp: data.rank_up_reward })
     if (data.achievements_unlocked?.length > 0) setUnlockedAchievements(data.achievements_unlocked)
     setTimeout(() => setPhase('result'), 2000)
   }
@@ -183,6 +183,7 @@ export default function DetectivePage() {
         <ResultScreen score={Math.max(0, Math.round((found.size/currentCase.violations.length)*100 - falseAlarms*10))}
           correct={found.size} total={currentCase.violations.length}
           xpEarned={result.xp} coinsEarned={result.coins} levelUp={result.levelUp}
+          bonusBreakdown={result.breakdown} rankUpReward={result.rankUp}
           branchColor={branchColor}
           onReplay={() => { setFound(new Set()); setFalseAlarms(0); setShowAll(false); setPhase('playing') }}
           gameLabel="Le Régulateur" />
