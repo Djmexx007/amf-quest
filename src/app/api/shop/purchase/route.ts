@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { verifyAccessToken } from '@/lib/auth'
+import { checkRateLimit, rateLimitKey, RATE_LIMITS, tooManyRequests } from '@/lib/rate-limit'
 
 export async function POST(request: NextRequest) {
   const token = request.cookies.get('amf_access')?.value
@@ -10,6 +11,10 @@ export async function POST(request: NextRequest) {
   if (!payload || !payload.branch_id) {
     return NextResponse.json({ error: 'Branche requise.' }, { status: 400 })
   }
+
+  // Rate limit: prevent purchase spam (10/min per user)
+  const rl = checkRateLimit(rateLimitKey(request, payload.sub), RATE_LIMITS.SHOP_PURCHASE)
+  if (!rl.allowed) return tooManyRequests(rl.resetIn) as NextResponse
 
   let body: { item_id?: string }
   try { body = await request.json() }

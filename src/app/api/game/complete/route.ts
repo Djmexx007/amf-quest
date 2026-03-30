@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { verifyAccessToken } from '@/lib/auth'
 import { calcXP, calcCoins, calcLevelFromXP, getCharacterClass, RANK_THRESHOLDS } from '@/lib/xp-calculator'
 import { checkAndUnlockAchievements } from '@/lib/achievements'
+import { checkRateLimit, rateLimitKey, RATE_LIMITS, tooManyRequests } from '@/lib/rate-limit'
 import type { GameType } from '@/types'
 
 export async function POST(request: NextRequest) {
@@ -10,6 +11,10 @@ export async function POST(request: NextRequest) {
   if (!token) return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 })
   const payload = verifyAccessToken(token)
   if (!payload || !payload.branch_id) return NextResponse.json({ error: 'Branche requise.' }, { status: 400 })
+
+  // Rate limit: prevent reward spam (30 completions/min per user)
+  const rl = checkRateLimit(rateLimitKey(request, payload.sub), RATE_LIMITS.GAME_COMPLETE)
+  if (!rl.allowed) return tooManyRequests(rl.resetIn) as NextResponse
 
   let body: {
     game_type: GameType
