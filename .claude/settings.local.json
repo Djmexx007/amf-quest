@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(node -e \"console.log\\(require\\(''crypto''\\).randomBytes\\(64\\).toString\\(''hex''\\)\\)\")",
+      "Bash(node -e \":*)",
+      "Bash(npx next:*)",
+      "Bash(ls src/app/api/admin/questions/[id]/)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//e/projets/amf-quest/**)",
+      "Bash(done)",
+      "Bash(curl -s http://localhost:3000/api/user/character -H \"Cookie: \")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/login)",
+      "Bash(curl -s -w \"\\\\n%{http_code}\" \"http://localhost:3000/login\")",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "Bash(node -e \"const d = require\\(''./src/app/games''\\); console.log\\(d\\)\")",
+      "Bash(ls src/app/invite/[token]/)",
+      "mcp__claude_ai_Supabase__list_projects"
+    ]
+  }
+}

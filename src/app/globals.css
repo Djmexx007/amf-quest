@@ -1,26 +1,93 @@
 @import "tailwindcss";
 
+/* ============================================================
+   AMF QUEST — Global CSS Variables & Base Styles
+   ============================================================ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --color-bg: #080A12;
+  --color-panel: #111628;
+  --color-panel-light: #161D35;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-gold: #D4A843;
+  --color-gold-dim: rgba(212, 168, 67, 0.15);
+  --color-gold-glow: rgba(212, 168, 67, 0.4);
+  --color-assurance: #25C292;
+  --color-assurance-dim: rgba(37, 194, 146, 0.15);
+  --color-fonds: #4D8BFF;
+  --color-fonds-dim: rgba(77, 139, 255, 0.15);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-background: var(--color-bg);
+  --color-foreground: #ffffff;
+  --font-sans: var(--font-exo2), system-ui, sans-serif;
+  --font-display: var(--font-cinzel), serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: #ffffff;
+  font-family: var(--font-exo2, system-ui), sans-serif;
 }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #111628; }
+::-webkit-scrollbar-thumb { background: rgba(212, 168, 67, 0.3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(212, 168, 67, 0.5); }
+
+::selection { background: rgba(212, 168, 67, 0.3); color: #fff; }
+
+/* RPG utility classes */
+.font-cinzel { font-family: var(--font-cinzel, serif); }
+.font-exo2   { font-family: var(--font-exo2, sans-serif); }
+.text-gold   { color: #D4A843; }
+.text-gold-glow { color: #D4A843; text-shadow: 0 0 20px rgba(212,168,67,0.5); }
+
+.rpg-card {
+  background: #111628;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.rpg-card:hover {
+  border-color: rgba(212,168,67,0.3);
+  box-shadow: 0 0 20px rgba(212,168,67,0.1);
+}
+
+/* Animations */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 10px rgba(212,168,67,0.3); }
+  50% { box-shadow: 0 0 25px rgba(212,168,67,0.6); }
+}
+@keyframes twinkle {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 1; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes xp-burst {
+  0% { opacity: 1; transform: scale(1) translateY(0); }
+  100% { opacity: 0; transform: scale(1.5) translateY(-40px); }
+}
+
+.animate-slide-up   { animation: slide-up 0.4s ease forwards; }
+.animate-fade-in    { animation: fade-in 0.3s ease forwards; }
+.animate-float      { animation: float 3s ease-in-out infinite; }
+.animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+.animate-xp-burst   { animation: xp-burst 0.8s ease-out forwards; }

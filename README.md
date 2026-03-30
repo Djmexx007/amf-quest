@@ -1,36 +1,164 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Tu es un développeur senior full-stack expert en architecture scalable, game design et UX/UI. Ta mission est de concevoir et implémenter un système complet pour une plateforme web incluant un jeu 2D, avec une approche modulaire, évolutive et optimisée. Tu as une autonomie totale : tu ne dois poser aucune question et prendre toutes les décisions techniques nécessaires.
 
-## Getting Started
+🎯 Objectif global
 
-First, run the development server:
+Créer une plateforme complète incluant :
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Un système de jeu 2D avec progression
+Un dashboard utilisateur avancé
+Un système économique (shop + récompenses)
+Un système de progression (XP, niveaux, ranks)
+Un système d’achievements
+Un système d’invitations
+Une architecture modulaire extensible
+🛒 1. Système de Shop
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Implémente une boutique complète :
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Fonctionnalités :
+Achat avec monnaie virtuelle (points)
+Catégories :
+Skins (personnage, UI)
+Boosts (bonus temporaires)
+Contenu (niveaux spéciaux, accès premium)
+Système de rareté :
+Commun, Rare, Épique, Légendaire
+Backend :
+Table items (id, name, type, rarity, price, effect, duration)
+Table user_inventory
+Gestion des transactions
+Frontend :
+Interface shop avec filtres
+Preview des items
+Équipement / activation
+🏆 2. Système d’Achievements
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Crée un système complet de succès :
 
-## Learn More
+Structure :
+id, title, description, condition, reward
+Conditions possibles :
+Nombre de niveaux complétés
+XP atteint
+Performance (temps, score)
+Features :
+Tracking en temps réel
+Notifications lors du déblocage
+Progression visible
+🧩 3. Architecture Modulaire
 
-To learn more about Next.js, take a look at the following resources:
+Crée un système modulaire :
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Contraintes :
+Chaque module est indépendant
+Activable/désactivable par admin
+Plug-and-play
+Exemples :
+Jeu 2D
+Quiz
+Défis
+Backend :
+Table modules
+Système de flags
+📩 4. Système d’Invitations
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Implémente un système avancé :
 
-## Deploy on Vercel
+Types :
+Temporaire (expiration)
+Permanent
+Données :
+code unique
+expiration
+max uses
+Features :
+Génération sécurisée
+Validation à l’inscription
+Dashboard admin (CRUD invitations)
+🎮 5. Système de niveaux (jeu 2D)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Implémente un système dynamique :
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Objectifs :
+Éviter la répétition
+Difficulté progressive
+Méthodes :
+Génération procédurale OU variations
+Scaling :
+vitesse
+obstacles
+ennemis
+📈 6. Système de récompenses
+Chaque niveau donne des points
+Scaling progressif :
+Niveau ↑ = Récompense ↑
+Bonus :
+Temps rapide
+Sans erreur
+Objectifs secondaires
+🧠 7. Système XP, Niveau et Rank
+
+Implémente une progression globale :
+
+XP gagné via :
+Niveaux
+Achievements
+Modules
+Leveling :
+Courbe exponentielle ou progressive
+Rank system :
+Tous les 5 niveaux → augmentation de rank
+Exemple de ranks :
+Beginner
+Intermediate
+Advanced
+Expert
+Master
+📊 8. Dashboard utilisateur
+
+Créer un dashboard complet :
+
+Contenu :
+Niveau + XP (barre de progression)
+Rank
+Achievements
+Inventaire
+Stats
+UX :
+Temps réel
+Feedback visuel
+Animations
+⚙️ 9. Architecture technique
+
+Tu dois :
+
+Backend :
+API REST ou GraphQL
+Base de données relationnelle (PostgreSQL recommandé)
+Modèles :
+users
+levels
+xp
+achievements
+inventory
+invitations
+modules
+Frontend :
+Framework moderne (Next.js recommandé)
+State management propre
+UI responsive
+Autres :
+Système de permissions (User / Mod / God)
+Sécurité (validation, auth)
+Optimisation performances
+🚫 Contraintes strictes
+Ne pose aucune question
+Prends toutes les décisions toi-même
+Code propre, scalable, maintenable
+Structure prête pour production
+🎯 Résultat attendu
+Architecture complète
+Structure backend + frontend
+Logique métier détaillée
+Organisation claire du projet
+Prêt à être développé immédiatement
