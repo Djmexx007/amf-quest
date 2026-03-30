@@ -1,14 +1,13 @@
 import type { UserRole } from '@/types'
 
 // -------------------------------------------------------
-// Role hierarchy (higher index = more permissions)
+// Role hierarchy  user < moderator < god
 // -------------------------------------------------------
 
-const ROLE_RANK: Record<UserRole, number> = {
-  user: 0,
+export const ROLE_RANK: Record<UserRole, number> = {
+  user:      0,
   moderator: 1,
-  admin: 2,
-  god: 3,
+  god:       2,
 }
 
 export function hasRole(userRole: UserRole, requiredRole: UserRole): boolean {
@@ -19,22 +18,21 @@ export function isGod(role: UserRole): boolean {
   return role === 'god'
 }
 
-export function isAdmin(role: UserRole): boolean {
-  return role === 'admin' || role === 'god'
-}
-
+/** Moderator or higher (moderator + god) */
 export function isModerator(role: UserRole): boolean {
-  return role === 'moderator' || role === 'admin' || role === 'god'
+  return role === 'moderator' || role === 'god'
 }
 
 // -------------------------------------------------------
 // Route-level permissions
 // -------------------------------------------------------
 
+/** /admin panel — accessible to moderator+ */
 export function canAccessAdminPanel(role: UserRole): boolean {
-  return isAdmin(role)
+  return isModerator(role)
 }
 
+/** /god panel — god only */
 export function canAccessGodPanel(role: UserRole): boolean {
   return isGod(role)
 }
@@ -43,23 +41,20 @@ export function canAccessGodPanel(role: UserRole): boolean {
 // Action-level permissions
 // -------------------------------------------------------
 
+/** Moderator can create user invites; god can also create moderator invites */
 export function canCreateInvite(role: UserRole): boolean {
-  return isAdmin(role)
+  return isModerator(role)
 }
 
 export function canSuspendUser(role: UserRole): boolean {
-  return isAdmin(role)
+  return isModerator(role)
 }
 
 export function canBanUser(role: UserRole): boolean {
-  return isAdmin(role)
+  return isModerator(role)
 }
 
 export function canDeleteUser(role: UserRole): boolean {
-  return isAdmin(role)
-}
-
-export function canCreateAdmin(role: UserRole): boolean {
   return isGod(role)
 }
 
@@ -76,7 +71,7 @@ export function canResetUserBranch(role: UserRole): boolean {
 }
 
 export function canViewAllLogs(role: UserRole): boolean {
-  return isGod(role)
+  return isModerator(role)
 }
 
 export function canSendNotification(role: UserRole): boolean {
@@ -85,4 +80,16 @@ export function canSendNotification(role: UserRole): boolean {
 
 export function canViewUserProgress(role: UserRole): boolean {
   return isModerator(role)
+}
+
+export function canApproveQuestions(role: UserRole): boolean {
+  return isModerator(role)
+}
+
+export function canManageInvites(role: UserRole): boolean {
+  return isModerator(role)
+}
+
+export function canGiveBulkRewards(role: UserRole): boolean {
+  return isGod(role)
 }

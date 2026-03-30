@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { verifyAccessToken, signAccessToken, buildAccessCookie } from '@/lib/auth'
 
-// Admin/God can switch branches freely
+// Moderator/God can switch branches freely
 export async function POST(request: NextRequest) {
   const token = request.cookies.get('amf_access')?.value
   if (!token) return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 })
@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   const payload = verifyAccessToken(token)
   if (!payload) return NextResponse.json({ error: 'Token invalide.' }, { status: 401 })
 
-  if (payload.role !== 'admin' && payload.role !== 'god') {
+  if (payload.role !== 'moderator' && payload.role !== 'god') {
     return NextResponse.json({ error: 'Permission insuffisante.' }, { status: 403 })
   }
 

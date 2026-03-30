@@ -29,14 +29,14 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 const ADMIN_ITEMS: NavItem[] = [
-  { href: '/admin',              label: 'Admin',         icon: <ShieldCheck size={18} />, roles: ['moderator', 'admin', 'god'] },
-  { href: '/admin/questions',    label: 'Questions',     icon: <BookOpen size={18} />,    roles: ['moderator', 'admin', 'god'] },
-  { href: '/admin/branch-requests', label: 'Changements',  icon: <ArrowRightLeft size={18} />, roles: ['admin', 'god'] },
-  { href: '/admin/invites',         label: 'Invitations',  icon: <Users size={18} />,         roles: ['admin', 'god'] },
-  { href: '/admin/users',           label: 'Utilisateurs', icon: <Users size={18} />,         roles: ['admin', 'god'] },
-  { href: '/admin/analytics',    label: 'Analytics',     icon: <BarChart3 size={18} />,   roles: ['admin', 'god'] },
-  { href: '/admin/settings',     label: 'Paramètres',    icon: <Settings size={18} />,    roles: ['admin', 'god'] },
-  { href: '/god',                label: 'GOD Panel',     icon: <Crown size={18} />,        roles: ['god'] },
+  { href: '/admin',                 label: 'Admin',       icon: <ShieldCheck size={18} />, roles: ['moderator', 'god'] },
+  { href: '/admin/questions',       label: 'Questions',   icon: <BookOpen size={18} />,    roles: ['moderator', 'god'] },
+  { href: '/admin/branch-requests', label: 'Changements', icon: <ArrowRightLeft size={18} />, roles: ['moderator', 'god'] },
+  { href: '/admin/invites',         label: 'Invitations', icon: <Users size={18} />,       roles: ['moderator', 'god'] },
+  { href: '/admin/users',           label: 'Utilisateurs',icon: <Users size={18} />,       roles: ['moderator', 'god'] },
+  { href: '/admin/analytics',       label: 'Analytics',   icon: <BarChart3 size={18} />,   roles: ['moderator', 'god'] },
+  { href: '/admin/settings',        label: 'Paramètres',  icon: <Settings size={18} />,    roles: ['moderator', 'god'] },
+  { href: '/god',                   label: 'GOD Panel',   icon: <Crown size={18} />,       roles: ['god'] },
 ]
 
 interface Branch { id: string; name: string; color: string; icon: string }
@@ -58,7 +58,7 @@ export default function Sidebar() {
     (item) => !item.roles || (user && item.roles.includes(user.role))
   )
 
-  const isAdminOrGod = user?.role === 'admin' || user?.role === 'god'
+  const isAdminOrGod = user?.role === 'moderator' || user?.role === 'god'
 
   return (
     <aside

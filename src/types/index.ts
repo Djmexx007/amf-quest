@@ -6,7 +6,7 @@
 // Enums
 // -------------------------------------------------------
 
-export type UserRole = 'god' | 'admin' | 'moderator' | 'user'
+export type UserRole = 'god' | 'moderator' | 'user'
 
 export type UserStatus =
   | 'active'

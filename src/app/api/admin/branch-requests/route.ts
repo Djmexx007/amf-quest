@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { verifyAccessToken, signAccessToken, buildAccessCookie } from '@/lib/auth'
-import { isAdmin } from '@/lib/permissions'
+import { isModerator } from '@/lib/permissions'
 
 export async function GET(request: NextRequest) {
   const token = request.cookies.get('amf_access')?.value
   if (!token) return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 })
   const payload = verifyAccessToken(token)
-  if (!payload || !isAdmin(payload.role)) return NextResponse.json({ error: 'Permission insuffisante.' }, { status: 403 })
+  if (!payload || !isModerator(payload.role)) return NextResponse.json({ error: 'Permission insuffisante.' }, { status: 403 })
 
   const status = request.nextUrl.searchParams.get('status') ?? 'pending'
 

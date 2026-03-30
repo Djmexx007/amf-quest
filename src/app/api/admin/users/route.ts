@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   const token = request.cookies.get('amf_access')?.value
   if (!token) return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 })
   const payload = verifyAccessToken(token)
-  if (!payload || (payload.role !== 'admin' && payload.role !== 'god')) {
+  if (!payload || (payload.role !== 'moderator' && payload.role !== 'god')) {
     return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 })
   }
 
@@ -39,7 +39,7 @@ export async function PATCH(request: NextRequest) {
   const token = request.cookies.get('amf_access')?.value
   if (!token) return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 })
   const payload = verifyAccessToken(token)
-  if (!payload || (payload.role !== 'admin' && payload.role !== 'god')) {
+  if (!payload || (payload.role !== 'moderator' && payload.role !== 'god')) {
     return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 })
   }
 

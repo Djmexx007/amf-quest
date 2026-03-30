@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import type { UserRole } from '@/types'
 
 const ROLE_RANK: Record<UserRole, number> = {
-  user: 0, moderator: 1, admin: 2, god: 3,
+  user: 0, moderator: 1, god: 2,
 }
 
 interface Props {

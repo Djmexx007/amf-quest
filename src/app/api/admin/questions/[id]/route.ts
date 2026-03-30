@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { verifyAccessToken } from '@/lib/auth'
-import { isAdmin, isModerator } from '@/lib/permissions'
+import { isGod, isModerator } from '@/lib/permissions'
 
 // PATCH — approve / reject / update a question
 export async function PATCH(
@@ -26,10 +26,10 @@ export async function PATCH(
 
   const { action } = body
 
-  // Approve / reject — admin+ only
+  // Approve / reject — moderator+
   if (action === 'approve' || action === 'reject') {
-    if (!isAdmin(payload.role)) {
-      return NextResponse.json({ error: 'Seul un admin/god peut approuver les questions.' }, { status: 403 })
+    if (!isModerator(payload.role)) {
+      return NextResponse.json({ error: 'Seul un modérateur/god peut approuver les questions.' }, { status: 403 })
     }
 
     const { error } = await supabaseAdmin
@@ -49,9 +49,9 @@ export async function PATCH(
     return NextResponse.json({ message: action === 'approve' ? 'Question approuvée.' : 'Question rejetée.' })
   }
 
-  // Toggle active state
+  // Toggle active state — moderator+
   if (action === 'toggle') {
-    if (!isAdmin(payload.role)) {
+    if (!isModerator(payload.role)) {
       return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 })
     }
     const { data: q } = await supabaseAdmin.from('questions').select('is_active').eq('id', id).single()
@@ -74,8 +74,8 @@ export async function DELETE(
   const token = request.cookies.get('amf_access')?.value
   if (!token) return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 })
   const payload = verifyAccessToken(token)
-  if (!payload || !isAdmin(payload.role)) {
-    return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 })
+  if (!payload || !isGod(payload.role)) {
+    return NextResponse.json({ error: 'Seul le GOD peut supprimer des questions.' }, { status: 403 })
   }
 
   const { id } = await params

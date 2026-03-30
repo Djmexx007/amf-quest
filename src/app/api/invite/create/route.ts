@@ -34,12 +34,13 @@ export async function POST(request: NextRequest) {
 
   if (!email) return NextResponse.json({ error: 'Email requis.' }, { status: 400 })
 
-  // Non-god admins can't create admins
-  if (role === 'admin' && payload.role !== 'god') {
-    return NextResponse.json({ error: 'Seul le GOD peut créer des admins.' }, { status: 403 })
+  // Only valid roles: user and moderator
+  if (!['user', 'moderator'].includes(role as string)) {
+    return NextResponse.json({ error: 'Rôle invalide. Valeurs acceptées: user, moderator.' }, { status: 400 })
   }
-  if (role === 'god') {
-    return NextResponse.json({ error: 'Impossible de créer un compte GOD par invitation.' }, { status: 403 })
+  // Only god can invite moderators
+  if (role === 'moderator' && payload.role !== 'god') {
+    return NextResponse.json({ error: 'Seul le GOD peut inviter des modérateurs.' }, { status: 403 })
   }
 
   // Check if email already invited or has account

@@ -42,7 +42,7 @@ export default function LoginForm() {
       if (!res.ok) { setError(data.error ?? 'Une erreur est survenue.'); return }
       const user = data.user
       if (user.role === 'god') router.push('/god')
-      else if (user.role === 'admin' || user.role === 'moderator') router.push('/admin')
+      else if (user.role === 'moderator') router.push('/admin')
       else if (!user.selected_branch_id) router.push('/select-branch')
       else router.push(redirectTo)
     } catch {

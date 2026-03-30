@@ -32,6 +32,14 @@ interface GameState {
   moveSpeed: number
   jumpForce: number
   scoreMult: number
+  // Double jump
+  jumpsLeft: number
+  // Dash
+  dashCooldown: number
+  isDashing: boolean
+  dashVx: number
+  dashFrames: number
+  facingRight: boolean
 }
 
 // ── Level configs ────────────────────────────────────────────
@@ -296,6 +304,9 @@ export default function PlatformerPage() {
   const stateRef = useRef<GameState | null>(null)
   const rafRef = useRef<number>(0)
   const pausedRef = useRef(false)
+  // Track "just pressed" for jump and dash to avoid holding issues
+  const jumpQueueRef = useRef(false)
+  const dashQueueRef = useRef(false)
 
   const [appPhase, setAppPhase] = useState<AppPhase>('select')
   const [selectedLevel, setSelectedLevel] = useState<LevelConfig | null>(null)
@@ -362,7 +373,16 @@ export default function PlatformerPage() {
       moveSpeed: applied.moveSpeed ?? level.moveSpeed,
       jumpForce: applied.jumpForce ?? level.jumpForce,
       scoreMult: applied.scoreMult ?? 1,
+      // Double jump + dash
+      jumpsLeft: 2,
+      dashCooldown: 0,
+      isDashing: false,
+      dashVx: 0,
+      dashFrames: 0,
+      facingRight: true,
     }
+    jumpQueueRef.current = false
+    dashQueueRef.current = false
 
     setAppPhase('playing')
   }
@@ -372,6 +392,14 @@ export default function PlatformerPage() {
     const down = (e: KeyboardEvent) => {
       keysRef.current.add(e.code)
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault()
+      // Queue jump on fresh keydown (prevents hold-to-repeat double jump)
+      if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+        jumpQueueRef.current = true
+      }
+      // Queue dash on fresh keydown
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyX') {
+        dashQueueRef.current = true
+      }
     }
     const up = (e: KeyboardEvent) => keysRef.current.delete(e.code)
     window.addEventListener('keydown', down)
@@ -478,6 +506,20 @@ export default function PlatformerPage() {
     ctx.beginPath(); ctx.arc(psx + 8,  state.py + 12, 3, 0, Math.PI * 2); ctx.fill()
     ctx.beginPath(); ctx.arc(psx + 20, state.py + 12, 3, 0, Math.PI * 2); ctx.fill()
 
+    // Player: dash glow
+    if (state.isDashing) {
+      ctx.shadowColor = level.color
+      ctx.shadowBlur = 18
+      const dashGrad = ctx.createLinearGradient(psx, state.py, psx + PLAYER_W, state.py + PLAYER_H)
+      dashGrad.addColorStop(0, level.color)
+      dashGrad.addColorStop(1, '#ffffff80')
+      ctx.fillStyle = dashGrad
+      ctx.beginPath()
+      ctx.roundRect(psx, state.py, PLAYER_W, PLAYER_H, 5)
+      ctx.fill()
+      ctx.shadowBlur = 0
+    }
+
     // HUD
     ctx.fillStyle = 'rgba(0,0,0,0.6)'
     ctx.fillRect(0, 0, W, 36)
@@ -491,6 +533,31 @@ export default function PlatformerPage() {
     ctx.fillStyle = '#25C292'
     ctx.textAlign = 'right'
     ctx.fillText(`Q: ${state.qCount}`, W - 16, 23)
+
+    // Double jump indicator (top-right corner)
+    const jumpIconX = W - 80
+    const jumpIconY = 44
+    for (let j = 0; j < 2; j++) {
+      ctx.fillStyle = j < state.jumpsLeft ? '#FFD700' : 'rgba(255,215,0,0.2)'
+      ctx.beginPath()
+      ctx.arc(jumpIconX + j * 14, jumpIconY, 5, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'
+    ctx.font = '9px sans-serif'
+    ctx.textAlign = 'right'
+    ctx.fillText('2-SAUT', W - 16, jumpIconY + 4)
+
+    // Dash cooldown bar (top-right below jump)
+    const dashBarY = jumpIconY + 14
+    const dashBarW = 64
+    const dashFill = state.dashCooldown === 0 ? dashBarW : Math.max(0, dashBarW - (state.dashCooldown / 45) * dashBarW)
+    ctx.fillStyle = 'rgba(255,255,255,0.1)'
+    ctx.fillRect(W - 16 - dashBarW, dashBarY, dashBarW, 5)
+    ctx.fillStyle = state.dashCooldown === 0 ? level.color : 'rgba(255,255,255,0.3)'
+    ctx.fillRect(W - 16 - dashBarW, dashBarY, dashFill, 5)
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'
+    ctx.fillText('DASH', W - 16, dashBarY + 13)
   }, [])
 
   // ── Game loop ─────────────────────────────────────────────
@@ -502,16 +569,73 @@ export default function PlatformerPage() {
     }
 
     const keys = keysRef.current
-    if (keys.has('ArrowLeft') || keys.has('KeyA')) state.pvx = -state.moveSpeed
-    else if (keys.has('ArrowRight') || keys.has('KeyD')) state.pvx = state.moveSpeed
-    else state.pvx = 0
 
-    if ((keys.has('Space') || keys.has('ArrowUp') || keys.has('KeyW')) && state.onGround) {
-      state.pvy = state.jumpForce
-      state.onGround = false
+    // ── Dash ──────────────────────────────────────────────────
+    if (state.dashCooldown > 0) state.dashCooldown--
+
+    if (dashQueueRef.current && state.dashCooldown === 0 && !state.isDashing) {
+      const dir = (keys.has('ArrowLeft') || keys.has('KeyA')) ? -1 : 1
+      state.isDashing   = true
+      state.dashVx      = dir * state.moveSpeed * 3.5
+      state.dashFrames  = 10     // dash lasts 10 frames
+      state.dashCooldown = 45    // 45-frame cooldown (~0.75s)
+      state.pvy = 0              // cancel vertical momentum
+      // Visual feedback: spawn dash particles
+      for (let i = 0; i < 8; i++) {
+        state.particles.push({
+          x: state.px + PLAYER_W / 2,
+          y: state.py + PLAYER_H / 2,
+          vx: -dir * (Math.random() * 3 + 1),
+          vy: (Math.random() - 0.5) * 2,
+          life: 14,
+          color: selectedLevel?.color ?? '#4D8BFF',
+        })
+      }
+    }
+    dashQueueRef.current = false
+
+    if (state.isDashing) {
+      state.pvx = state.dashVx
+      state.dashFrames--
+      if (state.dashFrames <= 0) {
+        state.isDashing = false
+        state.dashVx = 0
+      }
+    } else {
+      if (keys.has('ArrowLeft') || keys.has('KeyA')) {
+        state.pvx = -state.moveSpeed
+        state.facingRight = false
+      } else if (keys.has('ArrowRight') || keys.has('KeyD')) {
+        state.pvx = state.moveSpeed
+        state.facingRight = true
+      } else {
+        state.pvx = 0
+      }
     }
 
-    state.pvy += state.gravity
+    // ── Double jump ───────────────────────────────────────────
+    if (jumpQueueRef.current && state.jumpsLeft > 0 && !state.isDashing) {
+      state.pvy = state.jumpsLeft === 2 ? state.jumpForce : state.jumpForce * 0.85
+      state.jumpsLeft--
+      state.onGround = false
+      // Air-jump particles
+      if (state.jumpsLeft === 0) {
+        for (let i = 0; i < 10; i++) {
+          state.particles.push({
+            x: state.px + PLAYER_W / 2,
+            y: state.py + PLAYER_H,
+            vx: (Math.random() - 0.5) * 5,
+            vy: Math.random() * 3 + 1,
+            life: 18,
+            color: '#FFD700',
+          })
+        }
+      }
+    }
+    jumpQueueRef.current = false
+
+    // ── Physics ───────────────────────────────────────────────
+    if (!state.isDashing) state.pvy += state.gravity
     state.px += state.pvx
     state.py += state.pvy
 
@@ -526,7 +650,11 @@ export default function PlatformerPage() {
       ) {
         state.py = p.y - PLAYER_H
         state.pvy = 0
-        state.onGround = true
+        if (!state.onGround) {
+          state.onGround = true
+          state.jumpsLeft = 2   // Restore double jump on landing
+          state.isDashing = false
+        }
       }
     })
 
@@ -534,6 +662,8 @@ export default function PlatformerPage() {
       state.py = H - 30 - PLAYER_H
       state.px = Math.max(60, state.scrollX + 60)
       state.pvy = 0
+      state.jumpsLeft = 2
+      state.isDashing = false
     }
 
     if (state.px < state.scrollX + 80) state.px = state.scrollX + 80
@@ -674,7 +804,8 @@ export default function PlatformerPage() {
   // Touch controls
   function touchLeft(down: boolean) { if (down) keysRef.current.add('ArrowLeft'); else keysRef.current.delete('ArrowLeft') }
   function touchRight(down: boolean) { if (down) keysRef.current.add('ArrowRight'); else keysRef.current.delete('ArrowRight') }
-  function touchJump() { keysRef.current.add('Space'); setTimeout(() => keysRef.current.delete('Space'), 100) }
+  function touchJump() { jumpQueueRef.current = true }
+  function touchDash() { dashQueueRef.current = true }
 
   // ── RENDER ────────────────────────────────────────────────
   const unlockedMax = getUnlockedLevel()
@@ -926,11 +1057,12 @@ export default function PlatformerPage() {
       </div>
 
       {/* Touch controls */}
-      <div className="flex gap-3 md:hidden">
+      <div className="flex gap-2 md:hidden flex-wrap justify-center">
         {[
-          { label: '←', down: () => touchLeft(true), up: () => touchLeft(false) },
-          { label: '↑', down: touchJump, up: () => {} },
-          { label: '→', down: () => touchRight(true), up: () => touchRight(false) },
+          { label: '←',    down: () => touchLeft(true),  up: () => touchLeft(false), color: 'rgba(212,168,67,0.15)', border: 'rgba(212,168,67,0.3)' },
+          { label: '⬆',   down: touchJump,               up: () => {},               color: 'rgba(77,139,255,0.15)', border: 'rgba(77,139,255,0.3)' },
+          { label: '→',    down: () => touchRight(true), up: () => touchRight(false), color: 'rgba(212,168,67,0.15)', border: 'rgba(212,168,67,0.3)' },
+          { label: '⚡',   down: touchDash,               up: () => {},               color: 'rgba(255,77,106,0.15)', border: 'rgba(255,77,106,0.4)' },
         ].map(btn => (
           <button key={btn.label}
             onTouchStart={e => { e.preventDefault(); btn.down() }}
@@ -938,11 +1070,15 @@ export default function PlatformerPage() {
             onMouseDown={btn.down}
             onMouseUp={btn.up}
             className="w-14 h-14 rounded-xl text-white text-xl font-bold select-none"
-            style={{ background: 'rgba(212,168,67,0.15)', border: '2px solid rgba(212,168,67,0.3)' }}>
+            style={{ background: btn.color, border: `2px solid ${btn.border}` }}>
             {btn.label}
           </button>
         ))}
+        <p className="w-full text-center text-gray-600 text-xs mt-1">⚡ = Dash (Shift/X)</p>
       </div>
+      <p className="text-gray-600 text-xs text-center hidden md:block">
+        Flèches/WASD = déplacer · Espace/W/↑ = sauter (×2) · Shift/X = dash ⚡
+      </p>
       <AchievementUnlockToast achievements={unlockedAchievements} onDone={() => setUnlockedAchievements([])} />
     </div>
   )

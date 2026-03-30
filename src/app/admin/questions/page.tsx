@@ -41,7 +41,7 @@ const EMPTY_ANSWERS: Answer[] = [
 export default function AdminQuestionsPage() {
   const { user } = useAuth()
   const { addToast } = useUIStore()
-  const isAdminPlus = user?.role === 'admin' || user?.role === 'god'
+  const isAdminPlus = user?.role === 'moderator' || user?.role === 'god'
 
   const [view, setView] = useState<'list' | 'create'>('list')
   const [questions, setQuestions] = useState<QuestionRow[]>([])

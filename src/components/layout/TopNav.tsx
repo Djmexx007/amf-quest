@@ -8,10 +8,10 @@ import Badge from '@/components/ui/Badge'
 import ProfileModal from '@/components/ui/ProfileModal'
 
 const ROLE_COLORS: Record<string, string> = {
-  god: '#D4A843', admin: '#FF4D6A', moderator: '#F59E0B', user: '#4D8BFF',
+  god: '#D4A843', moderator: '#F59E0B', user: '#4D8BFF',
 }
 const ROLE_LABELS: Record<string, string> = {
-  god: 'GOD', admin: 'ADMIN', moderator: 'MOD', user: 'USER',
+  god: 'GOD', moderator: 'MOD', user: 'USER',
 }
 
 const NOTIF_TYPE_COLOR: Record<string, string> = {
@@ -186,7 +186,7 @@ export default function TopNav() {
                   <div className="flex justify-end mt-1">
                     <Badge color={roleColor} size="sm">
                       {user.role === 'god' && <Crown size={9} className="mr-1 inline" />}
-                      {user.role === 'admin' && <Shield size={9} className="mr-1 inline" />}
+                      {user.role === 'moderator' && <Shield size={9} className="mr-1 inline" />}
                       {ROLE_LABELS[user.role]}
                     </Badge>
                   </div>
@@ -207,7 +207,7 @@ export default function TopNav() {
                   <div className="py-1">
                     <DropdownItem icon={<User size={14} />} label="Mon profil"
                       onClick={() => { setDropdownOpen(false); setProfileOpen(true) }} />
-                    {(user.role === 'admin' || user.role === 'god') && (
+                    {(user.role === 'moderator' || user.role === 'god') && (
                       <DropdownItem icon={<Settings size={14} />} label="Administration"
                         onClick={() => { setDropdownOpen(false); window.location.href = '/admin' }} />
                     )}

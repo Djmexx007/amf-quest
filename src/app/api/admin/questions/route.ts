@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { verifyAccessToken } from '@/lib/auth'
-import { isModerator, isAdmin } from '@/lib/permissions'
+import { isModerator, isGod } from '@/lib/permissions'
 
 // GET — list questions (pending for modo, all for admin/god)
 export async function GET(request: NextRequest) {
@@ -25,10 +25,7 @@ export async function GET(request: NextRequest) {
     .order('created_at', { ascending: false })
     .range(offset, offset + perPage - 1)
 
-  // Moderators only see their own pending questions unless admin+
-  if (!isAdmin(payload.role)) {
-    query = query.eq('created_by', payload.sub).eq('is_active', false)
-  } else if (status === 'pending') {
+  if (status === 'pending') {
     query = query.eq('is_active', false)
   } else if (status === 'active') {
     query = query.eq('is_active', true)
@@ -86,8 +83,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Exactement 1 réponse correcte requise.' }, { status: 400 })
   }
 
-  // God/admin questions are auto-approved; moderator questions are pending
-  const is_active = isAdmin(payload.role)
+  // God questions are auto-approved; moderator questions are pending
+  const is_active = isGod(payload.role)
 
   const { data: question, error: qErr } = await supabaseAdmin
     .from('questions')

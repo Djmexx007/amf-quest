@@ -14,7 +14,7 @@ interface Stats {
 
 export default function AdminPage() {
   const { user } = useAuth()
-  const isAdminPlus = user?.role === 'admin' || user?.role === 'god'
+  const isAdminPlus = user?.role === 'moderator' || user?.role === 'god'
   const [stats, setStats] = useState<Stats | null>(null)
   const [pendingQ, setPendingQ] = useState(0)
   const [pendingBranchReq, setPendingBranchReq] = useState(0)
@@ -165,7 +165,7 @@ export default function AdminPage() {
         <div className="mt-6 rpg-card p-4" style={{ border: '1px solid rgba(212,168,67,0.15)', background: 'rgba(212,168,67,0.03)' }}>
           <p className="text-[#D4A843] text-sm font-semibold mb-1">Mode Modérateur</p>
           <p className="text-gray-500 text-xs leading-relaxed">
-            En tant que modérateur, tu peux créer des questions qui seront soumises pour approbation par un admin ou god avant d'être disponibles dans les jeux.
+            En tant que modérateur, tu peux créer et approuver des questions, gérer les utilisateurs et les demandes de branche.
           </p>
         </div>
       )}
