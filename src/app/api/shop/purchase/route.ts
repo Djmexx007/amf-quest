@@ -21,22 +21,23 @@ export async function POST(request: NextRequest) {
   // Fetch item
   const { data: item } = await supabaseAdmin
     .from('shop_items')
-    .select('id, name, cost_coins, item_type, rarity, effect')
+    .select('id, name, cost_coins, item_type, rarity, effect, is_consumable')
     .eq('id', item_id)
     .eq('is_active', true)
     .single()
 
   if (!item) return NextResponse.json({ error: 'Item introuvable.' }, { status: 404 })
 
-  // Check already owned
-  const { data: existing } = await supabaseAdmin
-    .from('user_inventory')
-    .select('id')
-    .eq('user_id', payload.sub)
-    .eq('item_id', item_id)
-    .maybeSingle()
-
-  if (existing) return NextResponse.json({ error: 'Item déjà possédé.' }, { status: 409 })
+  // Consumables can be repurchased; permanents cannot
+  if (!item.is_consumable) {
+    const { data: existing } = await supabaseAdmin
+      .from('user_inventory')
+      .select('id')
+      .eq('user_id', payload.sub)
+      .eq('item_id', item_id)
+      .maybeSingle()
+    if (existing) return NextResponse.json({ error: 'Item déjà possédé.' }, { status: 409 })
+  }
 
   // Check coins
   const { data: character } = await supabaseAdmin

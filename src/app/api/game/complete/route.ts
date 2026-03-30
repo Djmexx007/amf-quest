@@ -53,12 +53,37 @@ export async function POST(request: NextRequest) {
 
   if (!character) return NextResponse.json({ error: 'Personnage introuvable.' }, { status: 404 })
 
+  // Check for equipped consumable boosts (XP/coins multipliers)
+  const { data: equippedInventory } = await supabaseAdmin
+    .from('user_inventory')
+    .select('id, shop_items!inner(item_type, effect, is_consumable)')
+    .eq('user_id', payload.sub)
+    .eq('branch_id', payload.branch_id)
+    .eq('is_equipped', true)
+
+  let boostXPMult = 1.0
+  let boostCoinsMult = 1.0
+  const consumedBoostIds: string[] = []
+
+  for (const inv of equippedInventory ?? []) {
+    const item = (inv.shop_items as unknown) as { item_type: string; effect: Record<string, unknown>; is_consumable: boolean }
+    if (item.item_type !== 'boost') continue
+    if (item.effect.xp_multiplier) boostXPMult *= Number(item.effect.xp_multiplier)
+    if (item.effect.coins_multiplier) boostCoinsMult *= Number(item.effect.coins_multiplier)
+    if (item.is_consumable) consumedBoostIds.push(inv.id)
+  }
+
   const { xp: rawXP, breakdown } = calcXP(
     game_type, questions_correct, questions_total,
     difficulty, best_streak, time_bonus_pct, character.level,
   )
-  const xp_earned = Math.round(rawXP * xpMultiplier)
-  const coins_earned = Math.round(calcCoins(xp_earned, character.level) * goldMultiplier)
+  const xp_earned = Math.round(rawXP * xpMultiplier * boostXPMult)
+  const coins_earned = Math.round(calcCoins(xp_earned, character.level) * goldMultiplier * boostCoinsMult)
+
+  // Consume used boosts
+  if (consumedBoostIds.length > 0) {
+    await supabaseAdmin.from('user_inventory').delete().in('id', consumedBoostIds)
+  }
 
   // Save session
   const { data: session } = await supabaseAdmin
@@ -165,6 +190,7 @@ export async function POST(request: NextRequest) {
     achievements_unlocked: newAchievements,
     bonus_breakdown: breakdown,
     rank_up_reward: rankUpReward,
+    boosts_applied: consumedBoostIds.length,
   })
 }
 

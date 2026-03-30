@@ -17,7 +17,8 @@
       "mcp__claude_ai_Supabase__apply_migration",
       "Bash(node -e \"const d = require\\(''./src/app/games''\\); console.log\\(d\\)\")",
       "Bash(ls src/app/invite/[token]/)",
-      "mcp__claude_ai_Supabase__list_projects"
+      "mcp__claude_ai_Supabase__list_projects",
+      "Bash(npm run:*)"
     ]
   }
 }

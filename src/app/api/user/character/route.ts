@@ -22,12 +22,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Personnage introuvable.' }, { status: 404 })
   }
 
-  // Fetch branch info
   const { data: branch } = await supabaseAdmin
     .from('branches')
     .select('slug, name, color, icon, exam_provider')
     .eq('id', payload.branch_id)
     .single()
 
-  return NextResponse.json({ character, branch })
+  // Return equipped items so games can apply visual/gameplay effects
+  const { data: inventory } = await supabaseAdmin
+    .from('user_inventory')
+    .select('item_id, is_equipped, shop_items(id, name, item_type, effect, rarity, is_consumable)')
+    .eq('user_id', payload.sub)
+    .eq('branch_id', payload.branch_id)
+    .eq('is_equipped', true)
+
+  const equipped_items = (inventory ?? []).map(inv => {
+    const item = (inv.shop_items as unknown) as { id: string; name: string; item_type: string; effect: Record<string, unknown>; rarity: string; is_consumable: boolean } | null
+    return item ? { ...item } : null
+  }).filter(Boolean)
+
+  return NextResponse.json({ character, branch, equipped_items })
 }

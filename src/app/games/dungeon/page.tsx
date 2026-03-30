@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import GameShell from '@/components/games/GameShell'
 import ResultScreen from '@/components/games/ResultScreen'
 import ProgressBar from '@/components/ui/ProgressBar'
-import { Heart, Sword, Shield } from 'lucide-react'
+import { Heart, Sword } from 'lucide-react'
 import AchievementUnlockToast from '@/components/ui/AchievementUnlockToast'
 
 interface Answer { id: string; answer_text: string; is_correct: boolean }
@@ -15,16 +15,17 @@ type RoomType = 'empty' | 'combat' | 'treasure' | 'boss' | 'completed'
 interface Room { id: number; type: RoomType; x: number; y: number; connected: number[] }
 
 function generateDungeon(): Room[] {
-  const rooms: Room[] = [
-    { id: 0, type: 'combat', x: 50, y: 80, connected: [1, 2] },
-    { id: 1, type: 'combat', x: 20, y: 60, connected: [0, 3] },
+  return [
+    { id: 0, type: 'combat',   x: 50, y: 80, connected: [1, 2] },
+    { id: 1, type: 'combat',   x: 20, y: 60, connected: [0, 3] },
     { id: 2, type: 'treasure', x: 80, y: 60, connected: [0, 4] },
-    { id: 3, type: 'combat', x: 20, y: 40, connected: [1, 5] },
-    { id: 4, type: 'combat', x: 70, y: 35, connected: [2, 5] },
-    { id: 5, type: 'boss', x: 45, y: 15, connected: [3, 4] },
+    { id: 3, type: 'combat',   x: 20, y: 40, connected: [1, 5] },
+    { id: 4, type: 'combat',   x: 70, y: 35, connected: [2, 5] },
+    { id: 5, type: 'boss',     x: 45, y: 15, connected: [3, 4] },
   ]
-  return rooms
 }
+
+const BOSS_MAX_HP = 3
 
 export default function DungeonPage() {
   const [phase, setPhase] = useState<Phase>('map')
@@ -43,8 +44,12 @@ export default function DungeonPage() {
   const [result, setResult] = useState<{ xp: number; coins: number; levelUp: boolean; breakdown?: import('@/lib/xp-calculator').BonusBreakdown; rankUp?: { name: string; bonusCoins: number; bonusXP: number } | null } | null>(null)
   const [unlockedAchievements, setUnlockedAchievements] = useState<{ slug: string; title: string; xp: number; coins: number }[]>([])
   const [treasureMsg, setTreasureMsg] = useState('')
-  const [bossHp, setBossHp] = useState(3)
+  const [bossHp, setBossHp] = useState(BOSS_MAX_HP)
   const [startTime] = useState(() => Date.now())
+  // Revive boost: loaded from character equipped items
+  const [hasRevive, setHasRevive] = useState(false)
+  const [reviveUsed, setReviveUsed] = useState(false)
+  const [reviveMsg, setReviveMsg] = useState('')
 
   useEffect(() => {
     Promise.all([
@@ -53,10 +58,14 @@ export default function DungeonPage() {
     ]).then(([charData, qData]) => {
       if (charData.branch?.color) setBranchColor(charData.branch.color)
       if (qData.questions) setAllQuestions(qData.questions)
+      // Check for Second Souffle / dungeon_revive boost
+      const equipped: { item_type: string; effect: Record<string, unknown> }[] = charData.equipped_items ?? []
+      const hasReviveBoost = equipped.some(i => i.item_type === 'boost' && i.effect?.dungeon_revive)
+      setHasRevive(hasReviveBoost)
     })
   }, [])
 
-  function getNextQuestion(difficulty: 1 | 2 | 3 = 2): Question | null {
+  function getNextQuestion(): Question | null {
     const available = allQuestions.filter(q => !usedIds.has(q.id))
     if (available.length === 0) return null
     const q = available[Math.floor(Math.random() * available.length)]
@@ -67,11 +76,10 @@ export default function DungeonPage() {
   function enterRoom(roomId: number) {
     const room = rooms.find(r => r.id === roomId)
     if (!room || room.type === 'completed') return
-
     setCurrentRoom(roomId)
 
     if (room.type === 'combat' || room.type === 'boss') {
-      const q = getNextQuestion(room.type === 'boss' ? 3 : 2)
+      const q = getNextQuestion()
       if (q) {
         setQuestion(q)
         setSelectedId(null)
@@ -101,23 +109,55 @@ export default function DungeonPage() {
         const newBossHp = bossHp - 1
         setBossHp(newBossHp)
         if (newBossHp <= 0) {
+          setRooms(prev => prev.map(r => r.id === currentRoom ? { ...r, type: 'completed' } : r))
           setTimeout(() => setPhase('victory'), 1500)
-          return
         }
+        // If boss still alive, continueBossFight() button will appear in JSX
+      } else {
+        // Regular combat room cleared
+        setRooms(prev => prev.map(r => r.id === currentRoom ? { ...r, type: 'completed' } : r))
       }
     } else {
       const dmg = isBoss ? 35 : 20
       const newHp = hp - dmg
       setHp(Math.max(0, newHp))
       if (newHp <= 0) {
-        setTimeout(() => setPhase('dead'), 1500)
-        return
+        // Check revive boost
+        if (hasRevive && !reviveUsed) {
+          setReviveUsed(true)
+          setHasRevive(false)
+          setHp(50)
+          setReviveMsg('💫 Second Souffle activé! +50 HP')
+          setTimeout(() => setReviveMsg(''), 3000)
+          // Consume the boost server-side
+          fetch('/api/shop/consume-boost', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ effect_key: 'dungeon_revive' }),
+          }).catch(() => {})
+        } else {
+          setTimeout(() => setPhase('dead'), 1500)
+          return
+        }
+      }
+      // In boss phase, wrong answer doesn't complete the room — player must keep fighting or retreat
+      if (!isBoss) {
+        setRooms(prev => prev.map(r => r.id === currentRoom ? { ...r, type: 'completed' } : r))
       }
     }
   }
 
-  async function leaveRoom() {
-    setRooms(prev => prev.map(r => r.id === currentRoom ? { ...r, type: 'completed' } : r))
+  // In boss fight: load next question without leaving the room
+  function continueBossFight() {
+    const q = getNextQuestion()
+    if (q) {
+      setQuestion(q)
+      setSelectedId(null)
+    }
+  }
+
+  // In regular combat: go back to map after question
+  function leaveRoom() {
     setPhase('map')
     setQuestion(null)
     setSelectedId(null)
@@ -126,11 +166,16 @@ export default function DungeonPage() {
   async function finishGame(victory: boolean) {
     const finalScore = victory ? score + 500 : Math.round(score * 0.5)
     const elapsed = (Date.now() - startTime) / 1000
-    const targetTime = 5 * 60 // 5 min par run = temps rapide
+    const targetTime = 5 * 60
     const timeBonusPct = victory ? Math.max(0, Math.min(1, 1 - elapsed / targetTime)) : 0
     const res = await fetch('/api/game/complete', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ game_type: 'dungeon', score: finalScore, questions_total: total, questions_correct: correct, best_streak: 0, avg_time_seconds: Math.round(elapsed / Math.max(total, 1)), difficulty: 2, time_bonus_pct: timeBonusPct }),
+      body: JSON.stringify({
+        game_type: 'dungeon', score: finalScore, questions_total: total,
+        questions_correct: correct, best_streak: 0,
+        avg_time_seconds: Math.round(elapsed / Math.max(total, 1)),
+        difficulty: 2, time_bonus_pct: timeBonusPct,
+      }),
     })
     const data = await res.json()
     setResult({ xp: data.xp_earned ?? 0, coins: data.coins_earned ?? 0, levelUp: data.level_up ?? false, breakdown: data.bonus_breakdown, rankUp: data.rank_up_reward })
@@ -138,7 +183,20 @@ export default function DungeonPage() {
     setPhase('result')
   }
 
-  const room = rooms.find(r => r.id === currentRoom)
+  function resetGame() {
+    setRooms(generateDungeon())
+    setHp(100)
+    setScore(0)
+    setCorrect(0)
+    setTotal(0)
+    setCurrentRoom(0)
+    setBossHp(BOSS_MAX_HP)
+    setUsedIds(new Set())
+    setReviveUsed(false)
+    setPhase('map')
+  }
+
+  const bossDefeated = bossHp <= 0
 
   return (
     <GameShell title="Donjon Roguelike" icon="🏰" branchColor={branchColor}>
@@ -149,6 +207,13 @@ export default function DungeonPage() {
           <ProgressBar value={hp} max={maxHp} color={hp > 50 ? '#25C292' : hp > 25 ? '#F59E0B' : '#FF4D6A'} height={10} />
           <span className="text-sm text-gray-400 flex-shrink-0">{hp}/{maxHp}</span>
           <span className="text-sm text-gray-500 ml-2">Score: <span style={{ color: branchColor }}>{score}</span></span>
+          {hasRevive && <span className="text-xs text-purple-400 ml-1">🫁 Revive</span>}
+        </div>
+      )}
+
+      {reviveMsg && (
+        <div className="max-w-2xl mx-auto mb-3 p-3 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-300 text-center text-sm font-semibold animate-slide-up">
+          {reviveMsg}
         </div>
       )}
 
@@ -174,10 +239,10 @@ export default function DungeonPage() {
               )}
             </svg>
             {rooms.map(roomItem => {
-              const isAccessible = currentRoom === -1 || rooms.find(r => r.id === currentRoom)?.connected.includes(roomItem.id) || roomItem.id === 0
+              const isAccessible = rooms.find(r => r.id === currentRoom)?.connected.includes(roomItem.id) || roomItem.id === 0
               const isCurrent = roomItem.id === currentRoom
-              const icons = { combat: '⚔️', boss: '💀', treasure: '🎁', empty: '?', completed: '✓' }
-              const colors = { combat: '#4D8BFF', boss: '#FF4D6A', treasure: '#D4A843', empty: '#666', completed: '#25C292' }
+              const icons: Record<RoomType, string> = { combat: '⚔️', boss: '💀', treasure: '🎁', empty: '?', completed: '✓' }
+              const colors: Record<RoomType, string> = { combat: '#4D8BFF', boss: '#FF4D6A', treasure: '#D4A843', empty: '#666', completed: '#25C292' }
               return (
                 <button key={roomItem.id}
                   onClick={() => isAccessible && roomItem.type !== 'completed' && enterRoom(roomItem.id)}
@@ -205,7 +270,24 @@ export default function DungeonPage() {
         <div className="max-w-2xl mx-auto animate-slide-up">
           <div className="flex items-center gap-2 mb-4 p-3 rounded-xl"
             style={{ background: phase === 'boss' ? 'rgba(255,77,106,0.1)' : 'rgba(77,139,255,0.1)', border: `1px solid ${phase === 'boss' ? '#FF4D6A40' : '#4D8BFF40'}` }}>
-            {phase === 'boss' ? <><span className="text-xl">💀</span><div><p className="font-cinzel font-bold text-red-400">BOSS!</p><p className="text-xs text-gray-400">Vie du boss: {'❤️'.repeat(bossHp)}</p></div></> : <><Sword size={18} className="text-[#4D8BFF]" /><p className="font-cinzel font-bold text-[#4D8BFF]">Combat — réponds correctement!</p></>}
+            {phase === 'boss' ? (
+              <>
+                <span className="text-xl">💀</span>
+                <div>
+                  <p className="font-cinzel font-bold text-red-400">BOSS!</p>
+                  <div className="flex gap-1 mt-0.5">
+                    {Array.from({ length: BOSS_MAX_HP }).map((_, i) => (
+                      <span key={i} className={`text-sm transition-all ${i < bossHp ? 'text-red-400' : 'text-gray-600'}`}>
+                        {i < bossHp ? '❤️' : '🖤'}
+                      </span>
+                    ))}
+                    <span className="text-xs text-gray-500 ml-1 self-center">({bossHp}/{BOSS_MAX_HP} HP)</span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <><Sword size={18} className="text-[#4D8BFF]" /><p className="font-cinzel font-bold text-[#4D8BFF]">Combat — réponds correctement!</p></>
+            )}
           </div>
 
           <div className="rpg-card p-5 mb-4">
@@ -217,7 +299,12 @@ export default function DungeonPage() {
             {question.answers.map(a => {
               const revealed = !!selectedId
               const state = revealed ? a.is_correct ? 'correct' : selectedId === a.id ? 'wrong' : 'dim' : 'idle'
-              const colors = { idle: ['rgba(255,255,255,0.03)', 'rgba(255,255,255,0.08)', '#fff'], correct: ['rgba(37,194,146,0.12)', '#25C292', '#25C292'], wrong: ['rgba(255,77,106,0.12)', '#FF4D6A', '#FF4D6A'], dim: ['rgba(255,255,255,0.01)', 'transparent', '#374151'] }[state]
+              const colors = {
+                idle:    ['rgba(255,255,255,0.03)', 'rgba(255,255,255,0.08)', '#fff'],
+                correct: ['rgba(37,194,146,0.12)', '#25C292', '#25C292'],
+                wrong:   ['rgba(255,77,106,0.12)', '#FF4D6A', '#FF4D6A'],
+                dim:     ['rgba(255,255,255,0.01)', 'transparent', '#374151'],
+              }[state]
               return (
                 <button key={a.id} onClick={() => handleAnswer(a)} disabled={!!selectedId}
                   className="w-full text-left px-4 py-3 rounded-xl text-sm transition-all disabled:cursor-default"
@@ -231,10 +318,24 @@ export default function DungeonPage() {
           {selectedId && (
             <div className="rpg-card p-4 mb-4 animate-slide-up">
               <p className="text-gray-300 text-sm">{question.explanation}</p>
-              <button onClick={leaveRoom} className="mt-3 w-full py-2 rounded-lg font-semibold text-sm transition-all"
-                style={{ background: `${branchColor}20`, border: `1px solid ${branchColor}40`, color: branchColor }}>
-                Continuer l'exploration →
-              </button>
+              <div className="mt-3">
+                {/* Boss fight: keep fighting until boss dead, unless boss just died */}
+                {phase === 'boss' && !bossDefeated ? (
+                  <button onClick={continueBossFight}
+                    className="w-full py-2 rounded-lg font-semibold text-sm transition-all"
+                    style={{ background: 'rgba(255,77,106,0.2)', border: '1px solid rgba(255,77,106,0.5)', color: '#FF4D6A' }}>
+                    ⚔️ Attaquer à nouveau — Boss {bossHp}/{BOSS_MAX_HP} ❤️
+                  </button>
+                ) : phase === 'boss' && bossDefeated ? (
+                  <p className="text-center text-[#D4A843] font-cinzel font-bold animate-pulse">🏆 Boss vaincu!</p>
+                ) : (
+                  <button onClick={leaveRoom}
+                    className="w-full py-2 rounded-lg font-semibold text-sm transition-all"
+                    style={{ background: `${branchColor}20`, border: `1px solid ${branchColor}40`, color: branchColor }}>
+                    Continuer l'exploration →
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -246,9 +347,13 @@ export default function DungeonPage() {
           <h2 className="font-cinzel text-2xl font-bold text-red-400 mb-2">Défaite</h2>
           <p className="text-gray-400 text-sm mb-6">Tu es tombé au combat. Mais tu as quand même gagné de l'expérience!</p>
           <div className="flex gap-3">
-            <button onClick={() => finishGame(false)} className="flex-1 py-3 rounded-lg font-cinzel font-semibold text-sm border border-white/10 text-gray-300">Voir les résultats</button>
-            <button onClick={() => { setRooms(generateDungeon()); setHp(100); setScore(0); setCorrect(0); setTotal(0); setCurrentRoom(0); setBossHp(3); setUsedIds(new Set()); setPhase('map') }}
-              className="flex-1 py-3 rounded-lg font-cinzel font-semibold text-sm" style={{ background: `${branchColor}20`, border: `1px solid ${branchColor}40`, color: branchColor }}>
+            <button onClick={() => finishGame(false)}
+              className="flex-1 py-3 rounded-lg font-cinzel font-semibold text-sm border border-white/10 text-gray-300">
+              Voir les résultats
+            </button>
+            <button onClick={resetGame}
+              className="flex-1 py-3 rounded-lg font-cinzel font-semibold text-sm"
+              style={{ background: `${branchColor}20`, border: `1px solid ${branchColor}40`, color: branchColor }}>
               Recommencer
             </button>
           </div>
@@ -260,7 +365,8 @@ export default function DungeonPage() {
           <div className="text-6xl mb-4 animate-float">🏆</div>
           <h2 className="font-cinzel text-2xl font-bold text-[#D4A843] mb-2">VICTOIRE!</h2>
           <p className="text-gray-400 text-sm mb-6">Tu as vaincu le Boss! Le donjon est conquis.</p>
-          <button onClick={() => finishGame(true)} className="w-full py-3 rounded-lg font-cinzel font-semibold text-sm tracking-widest uppercase"
+          <button onClick={() => finishGame(true)}
+            className="w-full py-3 rounded-lg font-cinzel font-semibold text-sm tracking-widest uppercase"
             style={{ background: 'linear-gradient(135deg, #D4A843, #B8892A)', color: '#080A12' }}>
             Réclamer tes récompenses
           </button>
@@ -271,7 +377,7 @@ export default function DungeonPage() {
         <ResultScreen score={score} correct={correct} total={total}
           xpEarned={result.xp} coinsEarned={result.coins} levelUp={result.levelUp}
           branchColor={branchColor}
-          onReplay={() => { setRooms(generateDungeon()); setHp(100); setScore(0); setCorrect(0); setTotal(0); setCurrentRoom(0); setBossHp(3); setUsedIds(new Set()); setPhase('map') }}
+          onReplay={resetGame}
           gameLabel="Donjon"
           bonusBreakdown={result.breakdown}
           rankUpReward={result.rankUp} />
