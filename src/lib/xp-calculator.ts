@@ -70,7 +70,7 @@ export function calcXP(
 
 export function calcCoins(xp: number, characterLevel: number = 1): number {
   const levelBonus = Math.min((characterLevel - 1) * 0.01, 0.3)
-  return Math.round(xp * 0.3 * (1 + levelBonus))
+  return Math.round(xp * 0.40 * (1 + levelBonus))
 }
 
 export function calcLevelFromXP(totalXP: number): { level: number; xpToNext: number } {
