@@ -16,12 +16,12 @@ const DIFF_MULTIPLIER = { 1: 1, 2: 1.5, 3: 2.5 }
 
 // Rank thresholds — bonus coins awarded on crossing these levels
 export const RANK_THRESHOLDS: Record<number, { name: string; bonusCoins: number; bonusXP: number }> = {
-  5:  { name: 'Initié',         bonusCoins: 200,  bonusXP: 300  },
-  10: { name: 'Intermédiaire',  bonusCoins: 400,  bonusXP: 600  },
-  15: { name: 'Avancé',         bonusCoins: 700,  bonusXP: 1000 },
-  20: { name: 'Expert',         bonusCoins: 1200, bonusXP: 1800 },
-  25: { name: 'Maître',         bonusCoins: 2000, bonusXP: 3000 },
-  30: { name: 'Légendaire',     bonusCoins: 3500, bonusXP: 5000 },
+  5:  { name: 'Initié',         bonusCoins: 150,  bonusXP: 300  },
+  10: { name: 'Intermédiaire',  bonusCoins: 300,  bonusXP: 600  },
+  15: { name: 'Avancé',         bonusCoins: 525,  bonusXP: 1000 },
+  20: { name: 'Expert',         bonusCoins: 900,  bonusXP: 1800 },
+  25: { name: 'Maître',         bonusCoins: 1500, bonusXP: 3000 },
+  30: { name: 'Légendaire',     bonusCoins: 2625, bonusXP: 5000 },
 }
 
 export interface BonusBreakdown {
@@ -70,7 +70,7 @@ export function calcXP(
 
 export function calcCoins(xp: number, characterLevel: number = 1): number {
   const levelBonus = Math.min((characterLevel - 1) * 0.01, 0.3)
-  return Math.round(xp * 0.40 * (1 + levelBonus))
+  return Math.round(xp * 0.30 * (1 + levelBonus))
 }
 
 export function calcLevelFromXP(totalXP: number): { level: number; xpToNext: number } {

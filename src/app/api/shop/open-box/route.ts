@@ -8,54 +8,54 @@ type RewardEntry = { weight: number; xp: number; coins: number; label: string; t
 // Reward pools per chest tier
 const CHEST_POOLS: Record<string, RewardEntry[]> = {
   novice: [
-    // cost: 250 — pools plus généreux, jackpot plus visible
-    { weight: 28, xp: 150,  coins: 50,  label: '✨ +150 XP & +50 Coins',       tier: 'common'    },
-    { weight: 25, xp: 0,    coins: 250, label: '🪙 +250 Coins',                tier: 'common'    },
-    { weight: 20, xp: 300,  coins: 75,  label: '✨ +300 XP & +75 Coins',       tier: 'common'    },
-    { weight: 14, xp: 500,  coins: 150, label: '💎 +500 XP & +150 Coins',      tier: 'rare'      },
-    { weight: 7,  xp: 0,    coins: 400, label: '🪙 +400 Coins',                tier: 'rare'      },
-    { weight: 4,  xp: 800,  coins: 150, label: '🌟 +800 XP & +150 Coins !',    tier: 'epic'      },
-    { weight: 2,  xp: 1500, coins: 300, label: '🏆 JACKPOT +1 500 XP & +300 Coins !!', tier: 'legendary' },
+    // cost: 750
+    { weight: 28, xp: 150,  coins: 38,  label: '✨ +150 XP & +38 Coins',       tier: 'common'    },
+    { weight: 25, xp: 0,    coins: 188, label: '🪙 +188 Coins',                tier: 'common'    },
+    { weight: 20, xp: 300,  coins: 56,  label: '✨ +300 XP & +56 Coins',       tier: 'common'    },
+    { weight: 14, xp: 500,  coins: 113, label: '💎 +500 XP & +113 Coins',      tier: 'rare'      },
+    { weight: 7,  xp: 0,    coins: 300, label: '🪙 +300 Coins',                tier: 'rare'      },
+    { weight: 4,  xp: 800,  coins: 113, label: '🌟 +800 XP & +113 Coins !',    tier: 'epic'      },
+    { weight: 2,  xp: 1500, coins: 225, label: '🏆 JACKPOT +1 500 XP & +225 Coins !!', tier: 'legendary' },
   ],
   elite: [
-    // cost: 750 — bon ratio coins/valeur, jackpot attrayant
-    { weight: 18, xp: 400,  coins: 150,  label: '✨ +400 XP & +150 Coins',       tier: 'common'    },
-    { weight: 18, xp: 0,    coins: 500,  label: '🪙 +500 Coins',                 tier: 'common'    },
-    { weight: 22, xp: 700,  coins: 250,  label: '💎 +700 XP & +250 Coins',       tier: 'rare'      },
-    { weight: 18, xp: 0,    coins: 800,  label: '🪙 +800 Coins',                 tier: 'rare'      },
-    { weight: 12, xp: 1000, coins: 350,  label: '🌟 +1 000 XP & +350 Coins !',   tier: 'epic'      },
+    // cost: 2250
+    { weight: 18, xp: 400,  coins: 113,  label: '✨ +400 XP & +113 Coins',       tier: 'common'    },
+    { weight: 18, xp: 0,    coins: 375,  label: '🪙 +375 Coins',                 tier: 'common'    },
+    { weight: 22, xp: 700,  coins: 188,  label: '💎 +700 XP & +188 Coins',       tier: 'rare'      },
+    { weight: 18, xp: 0,    coins: 600,  label: '🪙 +600 Coins',                 tier: 'rare'      },
+    { weight: 12, xp: 1000, coins: 263,  label: '🌟 +1 000 XP & +263 Coins !',   tier: 'epic'      },
     { weight: 7,  xp: 2000, coins: 0,    label: '💫 +2 000 XP !',                tier: 'epic'      },
-    { weight: 5,  xp: 1500, coins: 800,  label: '⚡ JACKPOT +1 500 XP & +800 Coins !!', tier: 'legendary' },
+    { weight: 5,  xp: 1500, coins: 600,  label: '⚡ JACKPOT +1 500 XP & +600 Coins !!', tier: 'legendary' },
   ],
   legendary: [
-    // cost: 1800 — valeur réelle supérieure au coût, jackpot spectaculaire
-    { weight: 10, xp: 600,  coins: 250,  label: '✨ +600 XP & +250 Coins',                   tier: 'rare'      },
-    { weight: 12, xp: 0,    coins: 1000, label: '🪙 +1 000 Coins',                           tier: 'rare'      },
-    { weight: 22, xp: 1200, coins: 500,  label: '🌟 +1 200 XP & +500 Coins !',               tier: 'epic'      },
+    // cost: 5400
+    { weight: 10, xp: 600,  coins: 188,  label: '✨ +600 XP & +188 Coins',                   tier: 'rare'      },
+    { weight: 12, xp: 0,    coins: 750,  label: '🪙 +750 Coins',                             tier: 'rare'      },
+    { weight: 22, xp: 1200, coins: 375,  label: '🌟 +1 200 XP & +375 Coins !',               tier: 'epic'      },
     { weight: 18, xp: 2000, coins: 0,    label: '💫 +2 000 XP !',                            tier: 'epic'      },
-    { weight: 15, xp: 1100, coins: 1000, label: '⚡ +1 100 XP & +1 000 Coins !!',           tier: 'legendary' },
-    { weight: 15, xp: 2500, coins: 700,  label: '🏆 +2 500 XP & +700 Coins !!',             tier: 'legendary' },
-    { weight: 8,  xp: 4000, coins: 1500, label: '👑 JACKPOT +4 000 XP & +1 500 Coins !!!',  tier: 'legendary' },
+    { weight: 15, xp: 1100, coins: 750,  label: '⚡ +1 100 XP & +750 Coins !!',             tier: 'legendary' },
+    { weight: 15, xp: 2500, coins: 525,  label: '🏆 +2 500 XP & +525 Coins !!',             tier: 'legendary' },
+    { weight: 8,  xp: 4000, coins: 1125, label: '👑 JACKPOT +4 000 XP & +1 125 Coins !!!',  tier: 'legendary' },
   ],
 }
 
 const DEFAULT_POOL: RewardEntry[] = [
   { weight: 28, xp: 100,  coins: 0,   label: '✨ +100 XP',                    tier: 'common'    },
   { weight: 22, xp: 200,  coins: 0,   label: '✨ +200 XP',                    tier: 'common'    },
-  { weight: 18, xp: 0,    coins: 150, label: '🪙 +150 Coins',                  tier: 'common'    },
-  { weight: 14, xp: 250,  coins: 100, label: '🎉 +250 XP & +100 Coins',        tier: 'rare'      },
-  { weight: 10, xp: 0,    coins: 350, label: '🪙 +350 Coins',                  tier: 'rare'      },
-  { weight: 5,  xp: 500,  coins: 200, label: '🌟 +500 XP & +200 Coins !',      tier: 'epic'      },
+  { weight: 18, xp: 0,    coins: 113, label: '🪙 +113 Coins',                  tier: 'common'    },
+  { weight: 14, xp: 250,  coins: 75,  label: '🎉 +250 XP & +75 Coins',         tier: 'rare'      },
+  { weight: 10, xp: 0,    coins: 263, label: '🪙 +263 Coins',                  tier: 'rare'      },
+  { weight: 5,  xp: 500,  coins: 150, label: '🌟 +500 XP & +150 Coins !',      tier: 'epic'      },
   { weight: 2,  xp: 1000, coins: 0,   label: '💫 +1 000 XP !!',               tier: 'epic'      },
-  { weight: 0.8,xp: 800,  coins: 400, label: '⚡ +800 XP & +400 Coins !!',    tier: 'legendary' },
-  { weight: 0.2,xp: 2000, coins: 500, label: '🏆 JACKPOT +2 000 XP & +500 Coins !!!', tier: 'legendary' },
+  { weight: 0.8,xp: 800,  coins: 300, label: '⚡ +800 XP & +300 Coins !!',    tier: 'legendary' },
+  { weight: 0.2,xp: 2000, coins: 375, label: '🏆 JACKPOT +2 000 XP & +375 Coins !!!', tier: 'legendary' },
 ]
 
 // Chest cost (for coins compensation on duplicate/all-owned)
 const CHEST_COST: Record<string, number> = {
-  novice:    250,
-  elite:     750,
-  legendary: 1800,
+  novice:    750,
+  elite:     2250,
+  legendary: 5400,
 }
 
 // Item grant chance per chest tier (0 = never, updated probabilities)

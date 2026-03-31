@@ -6,13 +6,13 @@ import { checkRateLimit, rateLimitKey, RATE_LIMITS, tooManyRequests } from '@/li
 // Daily reward tiers based on login streak
 // streak 1 = day 1, 7 = weekly milestone
 const DAILY_REWARDS: Record<number, { xp: number; coins: number; label: string }> = {
-  1: { xp: 100, coins: 75,  label: 'Jour 1' },
-  2: { xp: 150, coins: 100, label: 'Jour 2' },
-  3: { xp: 200, coins: 130, label: 'Jour 3' },
-  4: { xp: 250, coins: 160, label: 'Jour 4' },
-  5: { xp: 300, coins: 200, label: 'Jour 5' },
-  6: { xp: 350, coins: 250, label: 'Jour 6' },
-  7: { xp: 600, coins: 400, label: '🏆 Semaine complète !' },
+  1: { xp: 100, coins: 56,  label: 'Jour 1' },
+  2: { xp: 150, coins: 75,  label: 'Jour 2' },
+  3: { xp: 200, coins: 98,  label: 'Jour 3' },
+  4: { xp: 250, coins: 120, label: 'Jour 4' },
+  5: { xp: 300, coins: 150, label: 'Jour 5' },
+  6: { xp: 350, coins: 188, label: 'Jour 6' },
+  7: { xp: 600, coins: 300, label: '🏆 Semaine complète !' },
 }
 
 function getRewardForStreak(streak: number) {
