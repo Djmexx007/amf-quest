@@ -24,9 +24,19 @@ export async function GET(request: NextRequest) {
     supabaseAdmin.from('user_inventory').select('item_id, is_equipped, shop_items(name, icon, item_type, rarity)').eq('user_id', userId).eq('branch_id', branchId).eq('is_equipped', true).limit(4),
   ])
 
-  // If no character exists (shouldn't happen, but handle gracefully)
+  // If no character, auto-create one (recovery for approved branch changes)
   if (!characterRes.data) {
-    return NextResponse.json({ error: 'Personnage introuvable. Réessaie dans quelques secondes.' }, { status: 404 })
+    const { data: userRow } = await supabaseAdmin.from('users').select('email').eq('id', userId).single()
+    await supabaseAdmin.from('characters').insert({
+      user_id: userId,
+      branch_id: branchId,
+      name: userRow?.email?.split('@')[0] ?? 'Joueur',
+      class_name: 'Recrue',
+    })
+    // Re-fetch after creation
+    const { data: newChar } = await supabaseAdmin.from('characters').select('*').eq('user_id', userId).eq('branch_id', branchId).single()
+    if (!newChar) return NextResponse.json({ error: 'Personnage introuvable.' }, { status: 404 })
+    ;(characterRes as { data: typeof newChar }).data = newChar
   }
 
   // Fetch user names + equipped titles for leaderboard

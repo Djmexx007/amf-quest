@@ -17,6 +17,7 @@ interface ShopItem {
   is_consumable: boolean
   owned: boolean
   equipped: boolean
+  locked?: boolean
 }
 
 interface BoxReward {
@@ -545,6 +546,43 @@ export default function ShopPage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {items.map(item => {
             const rc = RC[item.rarity]
+
+            // ── Mystery / locked card ──────────────────────────────
+            if (item.locked) {
+              return (
+                <div
+                  key={item.id}
+                  className="rpg-card p-4 flex flex-col relative overflow-hidden select-none"
+                  style={{
+                    border: `1px solid ${rc.color}30`,
+                    background: `${rc.bg}`,
+                    filter: 'saturate(0.4)',
+                  }}
+                >
+                  {/* Shimmer overlay */}
+                  <div className="absolute inset-0 pointer-events-none"
+                    style={{ background: 'repeating-linear-gradient(135deg, transparent, transparent 8px, rgba(255,255,255,0.015) 8px, rgba(255,255,255,0.015) 9px)' }} />
+                  {/* Rarity badge */}
+                  <div className="absolute top-2 right-2">
+                    <span className="text-xs px-1.5 py-0.5 rounded font-semibold"
+                      style={{ background: `${rc.color}20`, color: rc.color, border: `1px solid ${rc.color}30` }}>
+                      {rc.label}
+                    </span>
+                  </div>
+                  {/* Lock icon */}
+                  <div className="text-4xl text-center mt-4 mb-3">🔒</div>
+                  <p className="text-sm font-semibold text-center text-gray-500 mb-1">??? Mystérieux</p>
+                  <p className="text-xs text-center mb-3 flex-1" style={{ color: `${rc.color}80` }}>
+                    Débloquable depuis les coffres
+                  </p>
+                  <div className="w-full py-1.5 rounded-lg text-xs font-semibold text-center"
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#4B5563' }}>
+                    🗝️ Coffre requis
+                  </div>
+                </div>
+              )
+            }
+
             const canAfford = coins >= item.cost_coins
             const bgKey = item.effect?.background as string | undefined
             const bgPreview = bgKey ? BG_PREVIEW[bgKey] : null

@@ -10,9 +10,8 @@ export async function POST(request: NextRequest) {
   const payload = verifyAccessToken(token)
   if (!payload) return NextResponse.json({ error: 'Token invalide.' }, { status: 401 })
 
-  if (payload.role !== 'moderator' && payload.role !== 'god') {
-    return NextResponse.json({ error: 'Permission insuffisante.' }, { status: 403 })
-  }
+  // Regular users can switch only if they already have a character in the target branch
+  const isAdmin = payload.role === 'moderator' || payload.role === 'god'
 
   let body: { branch_id?: string }
   try { body = await request.json() }
@@ -29,6 +28,19 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (error || !branch) return NextResponse.json({ error: 'Branche introuvable.' }, { status: 404 })
+
+  // Regular users may only switch to a branch where they already have a character
+  if (!isAdmin) {
+    const { data: userChar } = await supabaseAdmin
+      .from('characters')
+      .select('id')
+      .eq('user_id', payload.sub)
+      .eq('branch_id', branch_id)
+      .maybeSingle()
+    if (!userChar) {
+      return NextResponse.json({ error: 'Accès non autorisé à cette branche.' }, { status: 403 })
+    }
+  }
 
   // Update user's selected branch
   await supabaseAdmin.from('users').update({ selected_branch_id: branch_id }).eq('id', payload.sub)

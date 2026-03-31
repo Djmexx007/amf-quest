@@ -26,6 +26,10 @@ export default function AuthProvider({ children, requiredRole = 'user' }: Props)
       router.push('/login')
       return
     }
+    if (!user.selected_branch_id) {
+      router.push('/select-branch')
+      return
+    }
     if (ROLE_RANK[user.role] < ROLE_RANK[requiredRole]) {
       router.push('/dashboard')
     }

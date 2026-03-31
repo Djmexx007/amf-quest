@@ -45,10 +45,17 @@ export default function Sidebar() {
   const { user } = useAuth()
   const { sidebarOpen } = useUIStore()
   const [branches, setBranches] = useState<Branch[]>([])
+  const [myBranches, setMyBranches] = useState<Branch[]>([])
 
   useEffect(() => {
     if (!user) return
-    fetch('/api/branches').then(r => r.json()).then(d => setBranches(d.branches ?? [])).catch(() => {})
+    // Admins see all branches; regular users see only their own
+    const isAdmin = user.role === 'moderator' || user.role === 'god'
+    if (isAdmin) {
+      fetch('/api/branches').then(r => r.json()).then(d => setBranches(d.branches ?? [])).catch(() => {})
+    } else {
+      fetch('/api/branches/my-branches').then(r => r.json()).then(d => setMyBranches(d.branches ?? [])).catch(() => {})
+    }
   }, [user])
 
   if (!sidebarOpen) return null
@@ -93,7 +100,9 @@ export default function Sidebar() {
       {user?.selected_branch_id && (
         isAdminOrGod
           ? <BranchSwitcher currentBranchId={user.selected_branch_id} branches={branches} />
-          : <BranchFooter currentBranchId={user.selected_branch_id} branches={branches} />
+          : myBranches.length > 1
+            ? <BranchSwitcher currentBranchId={user.selected_branch_id} branches={myBranches} />
+            : <BranchFooter currentBranchId={user.selected_branch_id} branches={myBranches} />
       )}
     </aside>
   )

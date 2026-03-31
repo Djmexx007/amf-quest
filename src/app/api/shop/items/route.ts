@@ -49,11 +49,18 @@ export async function GET(request: NextRequest) {
   const enriched = (items ?? [])
     // Hide chest-only items unless the player already owns them
     .filter(item => !(item.effect as Record<string, unknown>)?.chest_only || ownedMap.has(item.id))
-    .map(item => ({
-      ...item,
-      owned: ownedMap.has(item.id),
-      equipped: ownedMap.get(item.id) ?? false,
-    }))
+    .map(item => {
+      const effect = item.effect as Record<string, unknown>
+      const owned = ownedMap.has(item.id)
+      // chest_exclusive items are visible as mystery cards until owned
+      const isChestExclusive = !!effect?.chest_exclusive && !owned
+      return {
+        ...item,
+        owned,
+        equipped: ownedMap.get(item.id) ?? false,
+        locked: isChestExclusive,
+      }
+    })
 
   return NextResponse.json({
     items: enriched,

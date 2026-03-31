@@ -53,9 +53,9 @@ const DEFAULT_POOL: RewardEntry[] = [
 
 // Chest cost (for coins compensation on duplicate/all-owned)
 const CHEST_COST: Record<string, number> = {
-  novice:    750,
-  elite:     2250,
-  legendary: 5400,
+  novice:    400,
+  elite:     1200,
+  legendary: 3000,
 }
 
 // Item grant chance per chest tier (0 = never, updated probabilities)
