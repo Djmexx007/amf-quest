@@ -37,14 +37,28 @@ const RC = {
 }
 
 const BG_PREVIEW: Record<string, { bg: string; stars: string }> = {
-  galaxy:  { bg: 'radial-gradient(ellipse at 20% 50%, #1E0A4A, #0D0625)', stars: 'rgba(180,120,255,0.55)' },
-  abyss:   { bg: 'radial-gradient(ellipse at 75% 20%, #041828, #020B18)', stars: 'rgba(0,200,255,0.5)'   },
-  golden:  { bg: 'radial-gradient(ellipse at 50% 80%, #2E1A00, #1A0F00)', stars: 'rgba(212,168,67,0.65)' },
-  fire:    { bg: 'radial-gradient(ellipse at 30% 25%, #380900, #1E0500)', stars: 'rgba(255,100,30,0.65)' },
-  cosmic:  { bg: 'radial-gradient(ellipse at 65% 35%, #0C0935, #060518)', stars: 'rgba(100,150,255,0.55)'},
-  nebula:  { bg: 'radial-gradient(ellipse at 40% 60%, #2D0835, #160520)', stars: 'rgba(240,100,255,0.6)' },
-  matrix:  { bg: 'radial-gradient(ellipse at 50% 50%, #001E00, #000D00)', stars: 'rgba(0,255,80,0.6)'    },
-  diamond: { bg: 'radial-gradient(ellipse at 60% 35%, #001E30, #000F1C)', stars: 'rgba(100,230,255,0.6)' },
+  // Originaux
+  galaxy:         { bg: 'radial-gradient(ellipse at 20% 50%, #1E0A4A, #0D0625)', stars: 'rgba(180,120,255,0.55)' },
+  abyss:          { bg: 'radial-gradient(ellipse at 75% 20%, #041828, #020B18)', stars: 'rgba(0,200,255,0.5)'    },
+  golden:         { bg: 'radial-gradient(ellipse at 50% 80%, #2E1A00, #1A0F00)', stars: 'rgba(212,168,67,0.65)'  },
+  fire:           { bg: 'radial-gradient(ellipse at 30% 25%, #380900, #1E0500)', stars: 'rgba(255,100,30,0.65)'  },
+  cosmic:         { bg: 'radial-gradient(ellipse at 65% 35%, #0C0935, #060518)', stars: 'rgba(100,150,255,0.55)' },
+  nebula:         { bg: 'radial-gradient(ellipse at 40% 60%, #2D0835, #160520)', stars: 'rgba(240,100,255,0.6)'  },
+  matrix:         { bg: 'radial-gradient(ellipse at 50% 50%, #001E00, #000D00)', stars: 'rgba(0,255,80,0.6)'     },
+  diamond:        { bg: 'radial-gradient(ellipse at 60% 35%, #001E30, #000F1C)', stars: 'rgba(100,230,255,0.6)'  },
+  // Nouveaux
+  aurora:         { bg: 'radial-gradient(ellipse at 25% 75%, #003328, #001A16)', stars: 'rgba(0,255,180,0.6)'    },
+  ocean:          { bg: 'radial-gradient(ellipse at 50% 25%, #001535, #000A20)', stars: 'rgba(0,120,255,0.6)'    },
+  forest:         { bg: 'radial-gradient(ellipse at 35% 65%, #0A1800, #050D00)', stars: 'rgba(80,200,50,0.6)'    },
+  sunset:         { bg: 'radial-gradient(ellipse at 50% 100%, #3A1000, #200800)', stars: 'rgba(255,140,40,0.7)'  },
+  volcanic:       { bg: 'radial-gradient(ellipse at 30% 0%, #281000, #160600)', stars: 'rgba(255,80,20,0.6)'     },
+  neon:           { bg: 'radial-gradient(ellipse at 50% 80%, #150030, #08001A)', stars: 'rgba(200,80,255,0.7)'   },
+  holographic:    { bg: 'radial-gradient(ellipse at 25% 75%, #001535, #001A18)', stars: 'rgba(0,220,255,0.65)'   },
+  toxic:          { bg: 'radial-gradient(ellipse at 55% 45%, #122000, #090F00)', stars: 'rgba(150,255,50,0.65)'  },
+  vortex:         { bg: 'radial-gradient(ellipse at 50% 50%, #06000F, #030008)', stars: 'rgba(160,60,255,0.6)'   },
+  astral:         { bg: 'radial-gradient(ellipse at 45% 55%, #0A051E, #050310)', stars: 'rgba(120,150,255,0.6)'  },
+  interstellaire: { bg: 'radial-gradient(ellipse at 50% 50%, #010208, #000103)', stars: 'rgba(200,220,255,0.5)'  },
+  neant:          { bg: 'radial-gradient(ellipse at 50% 50%, #020202, #010101)', stars: 'rgba(100,100,100,0.3)'  },
 }
 
 const TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode }> = {
@@ -65,6 +79,11 @@ const SOUND_LABELS: Record<string, string> = {
   fart:         '💨 Pffft',
   ding:         '🔔 Ding',
   powerUp:      '🎵 8-Bit Power Up',
+  siren:        '🚨 Sifflet/Sirène',
+  gong:         '🔔 Gong Impérial',
+  thunder:      '⛈️ Tonnerre',
+  bassDrop:     '🎧 Bass Drop',
+  epicReveal:   '🌟 Révélation Épique',
 }
 
 function getEffectSummary(item: ShopItem): string | null {

@@ -36,7 +36,6 @@ const CHEST_POOLS: Record<string, RewardEntry[]> = {
   ],
 }
 
-// Fallback pool (original)
 const DEFAULT_POOL: RewardEntry[] = [
   { weight: 28, xp: 100,  coins: 0,   label: '✨ +100 XP',                    tier: 'common'    },
   { weight: 22, xp: 200,  coins: 0,   label: '✨ +200 XP',                    tier: 'common'    },
@@ -49,6 +48,30 @@ const DEFAULT_POOL: RewardEntry[] = [
   { weight: 0.2,xp: 2000, coins: 500, label: '🏆 JACKPOT +2 000 XP & +500 Coins !!!', tier: 'legendary' },
 ]
 
+// Chest cost (for coins compensation on duplicate/all-owned)
+const CHEST_COST: Record<string, number> = {
+  novice:    500,
+  elite:     1500,
+  legendary: 4000,
+}
+
+// Item grant chance per chest tier (0 = never, updated probabilities)
+const ITEM_GRANT_CHANCE: Record<string, number> = {
+  novice:    0,     // never grants exclusive items
+  elite:     0.10,  // 10%
+  legendary: 0.30,  // 30%
+}
+
+// Pity thresholds
+const PITY_ITEM_THRESHOLD      = 10   // guaranteed item after 10 chests without one
+const PITY_LEGENDARY_THRESHOLD = 30   // guaranteed legendary item after 30 elite/legendary chests
+
+// Rarity weights for exclusive item selection
+const ITEM_RARITY_WEIGHTS = {
+  elite:     { rare: 60, epic: 30, legendary: 10 },
+  legendary: { rare: 0,  epic: 60, legendary: 40 },
+}
+
 function roll(pool: RewardEntry[]): RewardEntry {
   const total = pool.reduce((s, r) => s + r.weight, 0)
   let rand = Math.random() * total
@@ -59,18 +82,27 @@ function roll(pool: RewardEntry[]): RewardEntry {
   return pool[0]
 }
 
-// Rarity selection weights by chest tier for exclusive item grants
-const ITEM_RARITY_WEIGHTS = {
-  elite:     { rare: 65, epic: 30, legendary: 5  },
-  legendary: { rare: 20, epic: 45, legendary: 35 },
-}
-
 function rollItemRarity(chestTier: 'elite' | 'legendary'): string {
   const w = ITEM_RARITY_WEIGHTS[chestTier]
   const rand = Math.random() * 100
   if (rand < w.legendary) return 'legendary'
   if (rand < w.legendary + w.epic) return 'epic'
   return 'rare'
+}
+
+async function getPity(userId: string) {
+  const { data } = await supabaseAdmin
+    .from('user_chest_pity')
+    .select('pity_item, pity_legendary')
+    .eq('user_id', userId)
+    .maybeSingle()
+  return { pityItem: data?.pity_item ?? 0, pityLegendary: data?.pity_legendary ?? 0 }
+}
+
+async function updatePity(userId: string, pityItem: number, pityLegendary: number) {
+  await supabaseAdmin
+    .from('user_chest_pity')
+    .upsert({ user_id: userId, pity_item: pityItem, pity_legendary: pityLegendary, updated_at: new Date().toISOString() })
 }
 
 export async function POST(request: NextRequest) {
@@ -88,19 +120,10 @@ export async function POST(request: NextRequest) {
 
   if (!body.item_id) return NextResponse.json({ error: 'item_id requis.' }, { status: 400 })
 
-  // Verify ownership and that this is actually a mystery box
+  // Verify ownership and that this is a mystery box
   const [{ data: inv }, { data: item }] = await Promise.all([
-    supabaseAdmin
-      .from('user_inventory')
-      .select('id')
-      .eq('user_id', payload.sub)
-      .eq('item_id', body.item_id)
-      .maybeSingle(),
-    supabaseAdmin
-      .from('shop_items')
-      .select('effect')
-      .eq('id', body.item_id)
-      .single(),
+    supabaseAdmin.from('user_inventory').select('id').eq('user_id', payload.sub).eq('item_id', body.item_id).maybeSingle(),
+    supabaseAdmin.from('shop_items').select('effect').eq('id', body.item_id).single(),
   ])
 
   if (!inv) return NextResponse.json({ error: 'Item non possédé.' }, { status: 403 })
@@ -108,7 +131,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Cet item n\'est pas une boîte mystère.' }, { status: 400 })
   }
 
-  const effect = item.effect as Record<string, unknown>
+  const effect    = item.effect as Record<string, unknown>
   const chestTier = (effect.chest_tier as string) ?? 'novice'
 
   // Fetch character
@@ -121,56 +144,93 @@ export async function POST(request: NextRequest) {
 
   if (!character) return NextResponse.json({ error: 'Personnage introuvable.' }, { status: 404 })
 
-  // Try to grant a chest-exclusive item (elite: 25%, legendary: 50%)
-  const itemGrantChance = chestTier === 'legendary' ? 0.50 : chestTier === 'elite' ? 0.25 : 0
+  // ── Pity system ───────────────────────────────────────────────
+  const { pityItem, pityLegendary } = await getPity(payload.sub)
+  const isEliteOrLegendary = chestTier === 'elite' || chestTier === 'legendary'
+
+  // Determine if item should be granted
+  const legendaryPityTriggered = isEliteOrLegendary && pityLegendary >= PITY_LEGENDARY_THRESHOLD
+  const itemPityTriggered      = pityItem >= PITY_ITEM_THRESHOLD
+  const normalItemChance       = ITEM_GRANT_CHANCE[chestTier] ?? 0
+  const shouldGrantItem        = legendaryPityTriggered
+    || itemPityTriggered
+    || (normalItemChance > 0 && Math.random() < normalItemChance)
+
+  // ── Exclusive item logic ──────────────────────────────────────
   let itemReward: { id: string; name: string; icon: string; rarity: string } | null = null
+  let coinsCompensation = 0
 
-  if (itemGrantChance > 0 && Math.random() < itemGrantChance) {
-    const itemRarity = rollItemRarity(chestTier as 'elite' | 'legendary')
+  if (shouldGrantItem && chestTier !== 'novice') {
+    // Determine rarity target
+    let targetRarity: string
+    if (legendaryPityTriggered) {
+      targetRarity = 'legendary'
+    } else {
+      targetRarity = rollItemRarity(chestTier as 'elite' | 'legendary')
+    }
 
+    // Fetch all exclusive items of this rarity
     const { data: exclusiveItems } = await supabaseAdmin
       .from('shop_items')
       .select('id, name, icon, rarity')
       .filter('effect->>chest_only', 'eq', 'true')
-      .eq('rarity', itemRarity)
+      .eq('rarity', targetRarity)
       .eq('is_active', true)
 
     if (exclusiveItems && exclusiveItems.length > 0) {
-      // Filter out items the user already owns
+      // Filter to items the user doesn't own yet
       const { data: owned } = await supabaseAdmin
         .from('user_inventory')
         .select('item_id')
         .eq('user_id', payload.sub)
         .in('item_id', exclusiveItems.map(i => i.id))
 
-      const ownedIds = new Set((owned ?? []).map(o => o.item_id))
+      const ownedIds  = new Set((owned ?? []).map(o => o.item_id))
       const available = exclusiveItems.filter(i => !ownedIds.has(i.id))
 
       if (available.length > 0) {
+        // Grant a random unowned exclusive item
         itemReward = available[Math.floor(Math.random() * available.length)]
         await supabaseAdmin.from('user_inventory').insert({
-          user_id: payload.sub,
-          item_id: itemReward.id,
-          branch_id: payload.branch_id,
+          user_id:    payload.sub,
+          item_id:    itemReward.id,
+          branch_id:  payload.branch_id,
           is_equipped: false,
         })
+      } else {
+        // All exclusives of this rarity already owned → coins compensation
+        coinsCompensation = Math.round((CHEST_COST[chestTier] ?? 500) * 0.5)
       }
     }
+
+    // Reset pity counters
+    const newPityItem      = 0 // reset whenever we attempted a grant
+    const newPityLegendary = targetRarity === 'legendary' ? 0 : (isEliteOrLegendary ? pityLegendary + 1 : pityLegendary)
+    await updatePity(payload.sub, newPityItem, newPityLegendary)
+  } else {
+    // No item granted — increment pity counters
+    const newPityItem      = pityItem + 1
+    const newPityLegendary = isEliteOrLegendary ? pityLegendary + 1 : pityLegendary
+    await updatePity(payload.sub, newPityItem, newPityLegendary)
   }
 
-  // Roll XP/coins reward (always rolled — if item was granted, XP/coins are reduced)
-  const pool = CHEST_POOLS[chestTier] ?? DEFAULT_POOL
-  const reward = roll(pool)
+  // ── XP / Coins reward (always rolled) ────────────────────────
+  const pool       = CHEST_POOLS[chestTier] ?? DEFAULT_POOL
+  const xpReward   = roll(pool)
 
-  // If item was granted, skip the XP/coins (item IS the reward)
-  const finalXP    = itemReward ? 0 : reward.xp
-  const finalCoins = itemReward ? 0 : reward.coins
+  // If exclusive item was granted or compensation given, replace the reward label
+  const finalXP    = (itemReward || coinsCompensation > 0) ? 0 : xpReward.xp
+  const finalCoins = itemReward ? 0 : (coinsCompensation > 0 ? coinsCompensation : xpReward.coins)
   const finalLabel = itemReward
     ? `🎁 "${itemReward.name}" obtenu !`
-    : reward.label
-  const finalTier  = itemReward ? itemReward.rarity : reward.tier
+    : coinsCompensation > 0
+      ? `🪙 Compensation doublons : +${coinsCompensation} Coins`
+      : xpReward.label
+  const finalTier  = itemReward
+    ? itemReward.rarity
+    : coinsCompensation > 0 ? 'rare' : xpReward.tier
 
-  // Apply XP/coins
+  // Apply to character
   const newXP    = character.xp + finalXP
   const newCoins = character.coins + finalCoins
   const { level: newLevel, xpToNext } = calcLevelFromXP(newXP)
@@ -197,11 +257,17 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     reward: {
-      xp: finalXP,
-      coins: finalCoins,
-      label: finalLabel,
-      tier: finalTier,
-      item: itemReward ?? undefined,
+      xp:     finalXP,
+      coins:  finalCoins,
+      label:  finalLabel,
+      tier:   finalTier,
+      item:   itemReward ?? undefined,
+      pity_progress: {
+        item:      Math.min(pityItem + 1, PITY_ITEM_THRESHOLD),
+        item_max:  PITY_ITEM_THRESHOLD,
+        legendary: isEliteOrLegendary ? Math.min(pityLegendary + 1, PITY_LEGENDARY_THRESHOLD) : pityLegendary,
+        legendary_max: PITY_LEGENDARY_THRESHOLD,
+      },
     },
     level_up: levelUp,
     new_level: levelUp ? newLevel : undefined,

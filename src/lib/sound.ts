@@ -67,6 +67,7 @@ function slideTone(
 export type SoundType =
   | 'buy' | 'equip' | 'hoverRare' | 'openChest' | 'legendaryDrop' | 'error'
   | 'airhorn' | 'sadTrombone' | 'rimshot' | 'cashRegister' | 'laser' | 'fart' | 'ding' | 'powerUp'
+  | 'siren' | 'gong' | 'thunder' | 'bassDrop' | 'epicReveal'
 
 export function playSound(type: SoundType) {
   switch (type) {
@@ -179,6 +180,51 @@ export function playSound(type: SoundType) {
       tone(659, 0.07, 'square', 0.10, 0.32)
       tone(784, 0.07, 'square', 0.11, 0.40)
       tone(1046, 0.25, 'square', 0.13, 0.48)
+      break
+
+    // ── Premium / épique sounds ──────────────────────────────────
+
+    case 'siren':
+      // Police/alarm wail — for wrong answers
+      slideTone(700, 500, 0.20, 'sawtooth', 0.10)
+      slideTone(500, 700, 0.20, 'sawtooth', 0.10, 0.22)
+      slideTone(700, 500, 0.20, 'sawtooth', 0.09, 0.44)
+      break
+
+    case 'gong':
+      // Deep resonant gong strike
+      tone(80,  0.05, 'sine', 0.18)
+      tone(80,  1.20, 'sine', 0.14, 0.04)
+      tone(160, 0.08, 'sine', 0.09, 0.02)
+      tone(240, 0.30, 'sine', 0.05, 0.01)
+      break
+
+    case 'thunder':
+      // Lightning crack + deep rumble
+      slideTone(800, 100, 0.08, 'sawtooth', 0.16)
+      tone(60,  0.40, 'sawtooth', 0.12, 0.06)
+      tone(50,  0.60, 'sawtooth', 0.09, 0.30)
+      tone(40,  0.50, 'sawtooth', 0.06, 0.70)
+      break
+
+    case 'bassDrop':
+      // Heavy EDM-style bass drop
+      slideTone(200, 40, 0.30, 'sawtooth', 0.18)
+      tone(40, 0.60, 'sawtooth', 0.16, 0.28)
+      tone(80, 0.10, 'sine',     0.12, 0.05)
+      tone(160,0.06, 'square',   0.08, 0.00)
+      break
+
+    case 'epicReveal':
+      // Dramatic cinematic build + impact
+      slideTone(220, 440, 0.30, 'sawtooth', 0.06)
+      slideTone(330, 660, 0.30, 'sawtooth', 0.06, 0.05)
+      tone(440, 0.06, 'sine', 0.12, 0.32)
+      tone(554, 0.06, 'sine', 0.13, 0.40)
+      tone(659, 0.06, 'sine', 0.14, 0.48)
+      tone(880, 0.08, 'sine', 0.16, 0.56)
+      tone(1109,0.60, 'sine', 0.18, 0.64)
+      tone(80,  0.40, 'sawtooth', 0.12, 0.60)
       break
   }
 }

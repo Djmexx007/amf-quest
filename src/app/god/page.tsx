@@ -5,7 +5,7 @@ import {
   Crown, UserPlus, Users, GitBranch, Activity,
   Copy, Check, ScrollText, Wrench, Plus, ToggleLeft,
   ToggleRight, ChevronLeft, ChevronRight, Trash2,
-  AlertTriangle, RefreshCw, X, Gift, Wallet,
+  AlertTriangle, RefreshCw, X, Gift, Wallet, Bug,
 } from 'lucide-react'
 import { useUIStore } from '@/stores/uiStore'
 import type { Toast } from '@/types'
@@ -33,7 +33,7 @@ interface BulkUser {
   id: string; email: string; full_name: string; role: string; status: string
 }
 
-type Tab = 'overview' | 'branches' | 'logs' | 'tools' | 'config' | 'questions' | 'users'
+type Tab = 'overview' | 'branches' | 'logs' | 'tools' | 'config' | 'questions' | 'users' | 'bugs'
 
 // ── Helpers ───────────────────────────────────────────────────
 const STATUS_COLOR: Record<string, string> = {
@@ -70,6 +70,7 @@ export default function GodPage() {
           { key: 'logs',       label: 'Logs',            icon: <ScrollText size={14} /> },
           { key: 'users',      label: 'Utilisateurs',    icon: <Users size={14} /> },
           { key: 'tools',      label: 'Dev',             icon: <Wrench size={14} /> },
+          { key: 'bugs',       label: 'Bugs',            icon: <Bug size={14} /> },
         ] as { key: Tab; label: string; icon: React.ReactNode }[]).map(t => (
           <button
             key={t.key}
@@ -91,6 +92,7 @@ export default function GodPage() {
       {tab === 'questions' && <QuestionsApprovalTab addToast={addToast} />}
       {tab === 'logs'      && <LogsTab />}
       {tab === 'tools'     && <ToolsTab addToast={addToast} />}
+      {tab === 'bugs'      && <BugReportsTab addToast={addToast} />}
     </div>
   )
 }
@@ -1492,6 +1494,169 @@ function UsersHubTab({ addToast }: { addToast: AddToast }) {
           {sendingGlobal ? 'Envoi...' : '🎁 Envoyer'}
         </button>
       </div>
+    </div>
+  )
+}
+
+// ── Bug Reports Tab ────────────────────────────────────────────────
+interface BugReport {
+  id: string
+  message: string
+  page: string | null
+  status: 'new' | 'in_progress' | 'resolved'
+  created_at: string
+  users: { full_name: string; email: string } | null
+}
+
+const STATUS_CONFIG = {
+  new:         { label: 'Nouveau',     color: '#FF4D6A', bg: 'rgba(255,77,106,0.1)'  },
+  in_progress: { label: 'En cours',    color: '#F59E0B', bg: 'rgba(245,158,11,0.1)'  },
+  resolved:    { label: 'Résolu',      color: '#25C292', bg: 'rgba(37,194,146,0.1)'  },
+}
+
+function BugReportsTab({ addToast }: { addToast: AddToast }) {
+  const [reports, setReports] = useState<BugReport[]>([])
+  const [total, setTotal]     = useState(0)
+  const [page, setPage]       = useState(1)
+  const [filter, setFilter]   = useState<string>('all')
+  const [loading, setLoading] = useState(false)
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const params = new URLSearchParams({ page: String(page) })
+    if (filter !== 'all') params.set('status', filter)
+    const res = await fetch(`/api/god/bug-reports?${params}`)
+    const data = await res.json()
+    setReports(data.reports ?? [])
+    setTotal(data.total ?? 0)
+    setLoading(false)
+  }, [page, filter])
+
+  useEffect(() => { load() }, [load])
+
+  async function setStatus(id: string, status: string) {
+    await fetch('/api/god/bug-reports', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, action: 'set_status', status }),
+    })
+    setReports(prev => prev.map(r => r.id === id ? { ...r, status: status as BugReport['status'] } : r))
+    addToast({ type: 'success', title: 'Statut mis à jour' })
+  }
+
+  async function deleteReport(id: string) {
+    await fetch('/api/god/bug-reports', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, action: 'delete' }),
+    })
+    setReports(prev => prev.filter(r => r.id !== id))
+    setTotal(t => t - 1)
+    addToast({ type: 'success', title: 'Rapport supprimé' })
+  }
+
+  const totalPages = Math.ceil(total / 20)
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-2">
+          <Bug size={18} className="text-[#FF4D6A]" />
+          <h2 className="font-cinzel text-white font-bold">Bug Reports</h2>
+          <span className="text-xs px-2 py-0.5 rounded-full"
+            style={{ background: 'rgba(255,77,106,0.15)', color: '#FF4D6A' }}>
+            {total} total
+          </span>
+        </div>
+        <div className="flex gap-2">
+          {(['all', 'new', 'in_progress', 'resolved'] as const).map(s => (
+            <button key={s} onClick={() => { setFilter(s); setPage(1) }}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
+              style={filter === s
+                ? { background: 'rgba(212,168,67,0.15)', color: '#D4A843', border: '1px solid rgba(212,168,67,0.3)' }
+                : { color: '#6B7280', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+              {s === 'all' ? 'Tous' : STATUS_CONFIG[s]?.label ?? s}
+            </button>
+          ))}
+          <button onClick={load} className="p-1.5 rounded-lg text-gray-500 hover:text-white transition-colors"
+            style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-12 text-gray-600">Chargement...</div>
+      ) : reports.length === 0 ? (
+        <div className="text-center py-12 text-gray-600">
+          <Bug size={32} className="mx-auto mb-3 opacity-30" />
+          <p className="text-sm">Aucun rapport {filter !== 'all' ? `avec le statut "${filter}"` : ''}</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {reports.map(r => {
+            const sc = STATUS_CONFIG[r.status]
+            const isOpen = expanded === r.id
+            return (
+              <div key={r.id} className="rounded-xl overflow-hidden"
+                style={{ background: '#0D1221', border: '1px solid rgba(255,255,255,0.07)' }}>
+                <div className="flex items-center gap-3 px-4 py-3 cursor-pointer"
+                  onClick={() => setExpanded(isOpen ? null : r.id)}>
+                  <span className="text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0"
+                    style={{ background: sc.bg, color: sc.color }}>
+                    {sc.label}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm truncate">{r.message}</p>
+                    <p className="text-gray-600 text-xs mt-0.5">
+                      {r.users?.full_name ?? '?'} · {r.page ?? '—'} · {new Date(r.created_at).toLocaleDateString('fr-CA')}
+                    </p>
+                  </div>
+                  <ChevronRight size={14} className={`text-gray-600 flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+                </div>
+
+                {isOpen && (
+                  <div className="px-4 pb-4 border-t border-white/5 pt-3 space-y-3">
+                    <p className="text-gray-300 text-sm whitespace-pre-wrap">{r.message}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-gray-600 text-xs">Changer statut :</span>
+                      {(['new', 'in_progress', 'resolved'] as const).map(s => (
+                        <button key={s} onClick={() => setStatus(r.id, s)}
+                          disabled={r.status === s}
+                          className="px-2.5 py-1 rounded-lg text-xs font-semibold transition-all disabled:opacity-40"
+                          style={{ background: STATUS_CONFIG[s].bg, color: STATUS_CONFIG[s].color, border: `1px solid ${STATUS_CONFIG[s].color}40` }}>
+                          {STATUS_CONFIG[s].label}
+                        </button>
+                      ))}
+                      <button onClick={() => deleteReport(r.id)}
+                        className="ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors">
+                        <Trash2 size={11} /> Supprimer
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+            className="p-1.5 rounded-lg text-gray-500 hover:text-white disabled:opacity-30 transition-colors"
+            style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
+            <ChevronLeft size={14} />
+          </button>
+          <span className="text-gray-400 text-sm">{page} / {totalPages}</span>
+          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+            className="p-1.5 rounded-lg text-gray-500 hover:text-white disabled:opacity-30 transition-colors"
+            style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }
