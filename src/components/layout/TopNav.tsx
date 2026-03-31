@@ -28,6 +28,7 @@ interface Notification {
 }
 
 function NotificationBell() {
+  const { user } = useAuth()
   const [open, setOpen] = useState(false)
   const [notifs, setNotifs] = useState<Notification[]>([])
   const [unread, setUnread] = useState(0)
@@ -36,6 +37,7 @@ function NotificationBell() {
   const load = useCallback(async () => {
     try {
       const res = await fetch('/api/notifications')
+      if (!res.ok) return
       const data = await res.json()
       if (data.notifications) {
         setNotifs(data.notifications)
@@ -45,10 +47,11 @@ function NotificationBell() {
   }, [])
 
   useEffect(() => {
+    if (!user) return  // only poll when authenticated
     load()
     const iv = setInterval(load, 30000) // poll every 30s
     return () => clearInterval(iv)
-  }, [load])
+  }, [load, user])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {

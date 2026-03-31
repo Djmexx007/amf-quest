@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { ShoppingBag, Zap, Sparkles, Crown, Filter, Flame, Package } from 'lucide-react'
-import { playSound } from '@/lib/sound'
+import { ShoppingBag, Zap, Sparkles, Crown, Filter, Flame, Package, Volume2 } from 'lucide-react'
+import { playSound, type SoundType } from '@/lib/sound'
+import { useUIStore } from '@/stores/uiStore'
 
 interface ShopItem {
   id: string
@@ -22,8 +23,10 @@ interface BoxReward {
   label: string
   xp: number
   coins: number
-  tier: string
+  tier: string        // rarity of the reward
+  chestTier?: string  // tier of the chest (novice/elite/legendary)
   levelUp?: boolean
+  item?: { id: string; name: string; icon: string; rarity: string }
 }
 
 const RC = {
@@ -34,11 +37,14 @@ const RC = {
 }
 
 const BG_PREVIEW: Record<string, { bg: string; stars: string }> = {
-  galaxy: { bg: 'linear-gradient(135deg, #0D0625, #1A0840, #0D0625)', stars: 'rgba(180,120,255,0.4)' },
-  abyss:  { bg: 'linear-gradient(135deg, #020B18, #051828, #020B18)', stars: 'rgba(0,200,255,0.35)' },
-  golden: { bg: 'linear-gradient(135deg, #1A0F00, #2A1800, #1A0F00)', stars: 'rgba(212,168,67,0.5)' },
-  fire:   { bg: 'linear-gradient(135deg, #1A0500, #2A0800, #1A0500)', stars: 'rgba(255,100,30,0.5)' },
-  cosmic: { bg: 'linear-gradient(135deg, #050515, #0A0830, #050515)', stars: 'rgba(100,150,255,0.4)' },
+  galaxy:  { bg: 'radial-gradient(ellipse at 20% 50%, #1E0A4A, #0D0625)', stars: 'rgba(180,120,255,0.55)' },
+  abyss:   { bg: 'radial-gradient(ellipse at 75% 20%, #041828, #020B18)', stars: 'rgba(0,200,255,0.5)'   },
+  golden:  { bg: 'radial-gradient(ellipse at 50% 80%, #2E1A00, #1A0F00)', stars: 'rgba(212,168,67,0.65)' },
+  fire:    { bg: 'radial-gradient(ellipse at 30% 25%, #380900, #1E0500)', stars: 'rgba(255,100,30,0.65)' },
+  cosmic:  { bg: 'radial-gradient(ellipse at 65% 35%, #0C0935, #060518)', stars: 'rgba(100,150,255,0.55)'},
+  nebula:  { bg: 'radial-gradient(ellipse at 40% 60%, #2D0835, #160520)', stars: 'rgba(240,100,255,0.6)' },
+  matrix:  { bg: 'radial-gradient(ellipse at 50% 50%, #001E00, #000D00)', stars: 'rgba(0,255,80,0.6)'    },
+  diamond: { bg: 'radial-gradient(ellipse at 60% 35%, #001E30, #000F1C)', stars: 'rgba(100,230,255,0.6)' },
 }
 
 const TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode }> = {
@@ -46,12 +52,30 @@ const TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode }> = {
   boost:    { label: 'Boosts',     icon: <Zap size={14} /> },
   title:    { label: 'Titres',     icon: <Crown size={14} /> },
   cosmetic: { label: 'Cosmétique', icon: <Sparkles size={14} /> },
+  son:      { label: 'Sons',       icon: <Volume2 size={14} /> },
   coffre:   { label: 'Coffres',    icon: <Package size={14} /> },
+}
+
+const SOUND_LABELS: Record<string, string> = {
+  airhorn:      '📯 Air Horn',
+  sadTrombone:  '😢 Trombone Triste',
+  rimshot:      '🥁 Ba Dum Tss',
+  cashRegister: '💸 Cha-Ching',
+  laser:        '⚡ Laser',
+  fart:         '💨 Pffft',
+  ding:         '🔔 Ding',
+  powerUp:      '🎵 8-Bit Power Up',
 }
 
 function getEffectSummary(item: ShopItem): string | null {
   const e = item.effect
   if (!e) return null
+  if (e.sound && e.trigger) {
+    const soundLabel = SOUND_LABELS[String(e.sound)] ?? String(e.sound)
+    return e.trigger === 'correct'
+      ? `${soundLabel} à chaque bonne réponse 🟢`
+      : `${soundLabel} à chaque mauvaise réponse 🔴`
+  }
   if (e.xp_multiplier && e.coins_multiplier) return `×${e.xp_multiplier} XP + ×${e.coins_multiplier} coins`
   if (e.xp_multiplier)    return `×${e.xp_multiplier} XP sur la prochaine partie`
   if (e.coins_multiplier) return `×${e.coins_multiplier} coins sur la prochaine partie`
@@ -63,68 +87,166 @@ function getEffectSummary(item: ShopItem): string | null {
   return null
 }
 
+// ── CSGO-style Chest Roulette ────────────────────────────────
+const TILE_W = 56
+const TILE_GAP = 4
+const TILE_FULL = TILE_W + TILE_GAP        // 60px per tile
+const VISIBLE_TILES = 7
+const WINNER_IDX = 22
+const TOTAL_TILES = 30
+const ROULETTE_DURATION = 5000             // ms
+
+// Where the strip lands: winner tile centered in the 7-tile window
+const ROULETTE_TARGET_X = -(
+  WINNER_IDX * TILE_FULL + TILE_W / 2 - (VISIBLE_TILES * TILE_FULL) / 2
+) // ≈ -1138px
+
+const CHEST_DIST: Record<string, string[]> = {
+  novice:    ['common', 'common', 'common', 'rare', 'rare', 'epic'],
+  elite:     ['common', 'rare', 'rare', 'epic', 'epic', 'legendary'],
+  legendary: ['rare', 'epic', 'epic', 'legendary', 'legendary'],
+}
+const RARITY_ICONS: Record<string, string[]> = {
+  common:    ['✨', '⚡', '🔑', '💫', '🌱'],
+  rare:      ['💎', '🔮', '⚔️', '🛡️', '🌊'],
+  epic:      ['🔥', '💥', '👑', '⚜️', '🌙'],
+  legendary: ['🏆', '⭐', '🦄', '🎯', '🔱'],
+}
+
+function buildRouletteTiles(winnerTier: string, chestTier: string) {
+  const dist = CHEST_DIST[chestTier] ?? CHEST_DIST.novice
+  return Array.from({ length: TOTAL_TILES }, (_, i) => {
+    if (i === WINNER_IDX) {
+      const icons = RARITY_ICONS[winnerTier] ?? RARITY_ICONS.common
+      return { rarity: winnerTier, icon: icons[0] }
+    }
+    const r = dist[i % dist.length]
+    const icons = RARITY_ICONS[r] ?? RARITY_ICONS.common
+    return { rarity: r, icon: icons[i % icons.length] }
+  })
+}
+
 function ChestModal({ reward, onClose }: { reward: BoxReward; onClose: () => void }) {
-  const [phase, setPhase] = useState<'opening' | 'reveal'>('opening')
+  const [phase, setPhase] = useState<'roulette' | 'reveal'>('roulette')
   const rc = RC[reward.tier as keyof typeof RC] ?? RC.common
+  const tiles = useRef(buildRouletteTiles(reward.tier, reward.chestTier ?? 'novice')).current
 
   useEffect(() => {
     playSound('openChest')
     const t = setTimeout(() => {
       setPhase('reveal')
       if (reward.tier === 'legendary' || reward.tier === 'epic') playSound('legendaryDrop')
-    }, 1800)
+    }, ROULETTE_DURATION + 500)
     return () => clearTimeout(t)
-  }, [])
+  }, [reward.tier])
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.9)' }}
+      style={{ background: 'rgba(0,0,0,0.92)' }}
       onClick={phase === 'reveal' ? onClose : undefined}
     >
       <div
-        className="w-full max-w-sm rounded-2xl p-8 text-center relative overflow-hidden"
+        className="w-full max-w-xl rounded-2xl p-6 text-center relative"
         style={{
-          background: '#111628',
-          border: `1px solid ${phase === 'reveal' ? rc.border : 'rgba(212,168,67,0.25)'}`,
-          boxShadow: phase === 'reveal' ? rc.glow : '0 0 40px rgba(212,168,67,0.1)',
+          background: '#0D1020',
+          border: `1px solid ${phase === 'reveal' ? rc.border : 'rgba(212,168,67,0.3)'}`,
+          boxShadow: phase === 'reveal' ? rc.glow : '0 0 50px rgba(212,168,67,0.12)',
         }}
         onClick={e => e.stopPropagation()}
       >
-        {phase === 'opening' ? (
+        {phase === 'roulette' ? (
           <>
-            <div className="text-7xl mb-6 animate-chest-shake">🎁</div>
-            <p className="font-cinzel text-white text-lg font-bold mb-5">Ouverture en cours...</p>
-            <div className="h-2 rounded-full overflow-hidden mb-2" style={{ background: 'rgba(255,255,255,0.06)' }}>
+            <p className="font-cinzel text-white text-base font-bold mb-4 tracking-widest uppercase">
+              Ouverture en cours...
+            </p>
+
+            {/* Roulette window */}
+            <div
+              className="relative rounded-xl overflow-hidden mx-auto mb-5"
+              style={{
+                width: VISIBLE_TILES * TILE_FULL,
+                height: 88,
+                background: '#080A12',
+                border: '1px solid rgba(255,255,255,0.07)',
+              }}
+            >
+              {/* Winner highlight frame */}
               <div
-                className="h-full rounded-full"
+                className="absolute top-0 bottom-0 z-10 pointer-events-none"
                 style={{
-                  width: '0%',
-                  background: 'linear-gradient(90deg, #D4A843, #F5C842)',
-                  animation: 'grow-bar 1.6s ease-in-out forwards',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: TILE_FULL,
+                  border: '2px solid #D4A843',
+                  boxShadow: '0 0 16px rgba(212,168,67,0.5), inset 0 0 10px rgba(212,168,67,0.08)',
                 }}
               />
+              {/* Fade edges */}
+              <div className="absolute inset-y-0 left-0 w-14 z-10 pointer-events-none"
+                style={{ background: 'linear-gradient(to right, #080A12, transparent)' }} />
+              <div className="absolute inset-y-0 right-0 w-14 z-10 pointer-events-none"
+                style={{ background: 'linear-gradient(to left, #080A12, transparent)' }} />
+
+              {/* Scrolling strip */}
+              <div
+                className="absolute top-0 left-0 flex items-center h-full"
+                style={{
+                  width: TOTAL_TILES * TILE_FULL + TILE_GAP,
+                  animation: `roulette-spin ${ROULETTE_DURATION}ms cubic-bezier(0.04, 0.88, 0.18, 1) forwards`,
+                }}
+              >
+                {tiles.map((tile, i) => {
+                  const trc = RC[tile.rarity as keyof typeof RC] ?? RC.common
+                  const isWinner = i === WINNER_IDX
+                  return (
+                    <div
+                      key={i}
+                      className="flex-shrink-0 flex flex-col items-center justify-center gap-1 rounded-lg"
+                      style={{
+                        width: TILE_W,
+                        height: 72,
+                        marginRight: TILE_GAP,
+                        background: isWinner ? `${trc.color}22` : `${trc.color}0E`,
+                        border: `1px solid ${isWinner ? trc.color : `${trc.color}35`}`,
+                      }}
+                    >
+                      <span className="text-xl leading-none">{tile.icon}</span>
+                      <span className="font-semibold" style={{ color: trc.color, fontSize: '9px', letterSpacing: '0.05em' }}>
+                        {trc.label}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
-            <p className="text-gray-600 text-xs mt-2">Préparation de ta récompense...</p>
+
+            <p className="text-gray-600 text-xs tracking-wide">Bonne chance...</p>
           </>
         ) : (
           <div className="animate-chest-reveal">
-            <div className={`text-6xl mb-4 ${reward.tier === 'legendary' ? 'animate-float' : ''}`}>🎁</div>
-            <p className="font-cinzel text-xl font-black text-white mb-3">Boîte ouverte !</p>
+            <div className={`text-6xl mb-4 ${reward.tier === 'legendary' ? 'animate-float' : ''}`}>
+              {reward.item ? reward.item.icon : '🎁'}
+            </div>
+            <p className="font-cinzel text-xl font-black text-white mb-3">
+              {reward.item ? 'Item exclusif obtenu !' : 'Coffre ouvert !'}
+            </p>
             <div className="mb-4">
               <p
-                className={`text-2xl font-bold mb-2 ${reward.tier === 'legendary' ? 'animate-legendary-text' : ''}`}
+                className={`text-2xl font-bold mb-3 ${reward.tier === 'legendary' ? 'animate-legendary-text' : ''}`}
                 style={{ color: rc.color }}
               >
                 {reward.label}
               </p>
               <span
-                className="text-xs px-2 py-1 rounded-full font-semibold"
+                className="text-xs px-3 py-1 rounded-full font-semibold"
                 style={{ background: `${rc.color}20`, color: rc.color, border: `1px solid ${rc.color}40` }}
               >
                 {rc.label}
               </span>
             </div>
+            {reward.xp > 0 && <p className="text-purple-300 text-sm mt-1">+{reward.xp} XP</p>}
+            {reward.coins > 0 && <p className="text-yellow-400 text-sm mt-1">+{reward.coins} 🪙</p>}
             {reward.levelUp && (
               <p className="text-green-400 text-sm font-semibold mt-2 animate-pulse">⬆️ Niveau supérieur !</p>
             )}
@@ -137,13 +259,20 @@ function ChestModal({ reward, onClose }: { reward: BoxReward; onClose: () => voi
             </button>
           </div>
         )}
+
+        <style>{`
+          @keyframes roulette-spin {
+            from { transform: translateX(0) }
+            to   { transform: translateX(${ROULETTE_TARGET_X}px) }
+          }
+        `}</style>
       </div>
-      <style>{`@keyframes grow-bar { from { width: 0% } to { width: 100% } }`}</style>
     </div>
   )
 }
 
 export default function ShopPage() {
+  const { setBgTheme, setEquippedTitle, setSoundOnCorrect, setSoundOnWrong } = useUIStore()
   const [items, setItems] = useState<ShopItem[]>([])
   const [coins, setCoins] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -179,7 +308,7 @@ export default function ShopPage() {
   const load = useCallback(async () => {
     setLoading(true)
     const params = new URLSearchParams()
-    const apiType = typeFilter === 'coffre' ? 'boost' : typeFilter
+    const apiType = typeFilter === 'coffre' ? 'boost' : typeFilter === 'son' ? 'sound' : typeFilter
     if (apiType !== 'all') params.set('type', apiType)
     if (rarityFilter !== 'all') params.set('rarity', rarityFilter)
     const res = await fetch(`/api/shop/items?${params}`)
@@ -191,6 +320,26 @@ export default function ShopPage() {
     setCoins(data.coins ?? 0)
     setLoading(false)
   }, [typeFilter, rarityFilter])
+
+  // Initialize equipped cosmetics/sounds from server on mount (survives page refresh)
+  useEffect(() => {
+    fetch('/api/shop/items')
+      .then(r => r.json())
+      .then((data) => {
+        const all: ShopItem[] = (data.items ?? [])
+        const equipped = all.filter(i => i.equipped)
+        const bgItem = equipped.find(i => i.item_type === 'cosmetic' && i.effect?.background)
+        const titleItem = equipped.find(i => i.item_type === 'title' && i.effect?.title)
+        const correctSoundItem = equipped.find(i => i.item_type === 'sound' && i.effect?.trigger === 'correct')
+        const wrongSoundItem   = equipped.find(i => i.item_type === 'sound' && i.effect?.trigger === 'wrong')
+        setBgTheme(bgItem ? String(bgItem.effect.background) : null)
+        setEquippedTitle(titleItem ? String(titleItem.effect.title) : null)
+        setSoundOnCorrect(correctSoundItem ? String(correctSoundItem.effect.sound) : null)
+        setSoundOnWrong(wrongSoundItem   ? String(wrongSoundItem.effect.sound)   : null)
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => { load() }, [load])
 
@@ -236,7 +385,7 @@ export default function ShopPage() {
       const data = await res.json()
       if (res.ok) {
         await load()
-        setChestReward({ ...data.reward, levelUp: data.level_up })
+        setChestReward({ ...data.reward, levelUp: data.level_up, chestTier: (item.effect?.chest_tier as string) ?? 'novice' })
       } else {
         playSound('error')
         showToast(data.error ?? "Erreur lors de l'ouverture.", false)
@@ -257,12 +406,30 @@ export default function ShopPage() {
         body: JSON.stringify({ item_id: item.id, equip: newEquip }),
       })
       if (res.ok) {
-        playSound('equip')
+        // Play the item's own sound (or default equip ping)
+        if (item.item_type === 'sound' && item.effect?.sound) {
+          playSound(item.effect.sound as SoundType)
+        } else {
+          playSound('equip')
+        }
         setItems(prev => prev.map(i => {
-          if (i.item_type === item.item_type && i.id !== item.id) return { ...i, equipped: false }
+          if (i.item_type === item.item_type && i.id !== item.id) {
+            // Sound items: only unequip those with the same trigger
+            if (item.item_type === 'sound' && i.effect?.trigger !== item.effect?.trigger) return i
+            return { ...i, equipped: false }
+          }
           if (i.id === item.id) return { ...i, equipped: newEquip }
           return i
         }))
+        // Apply cosmetic effects immediately
+        if (item.item_type === 'cosmetic' && item.effect?.background) {
+          setBgTheme(newEquip ? String(item.effect.background) : null)
+        } else if (item.item_type === 'title' && item.effect?.title) {
+          setEquippedTitle(newEquip ? String(item.effect.title) : null)
+        } else if (item.item_type === 'sound' && item.effect?.sound) {
+          const setter = item.effect.trigger === 'correct' ? setSoundOnCorrect : setSoundOnWrong
+          setter(newEquip ? String(item.effect.sound) : null)
+        }
         showToast(
           item.is_consumable
             ? (newEquip ? `🔥 "${item.name}" actif — sera utilisé à la prochaine partie!` : `"${item.name}" désactivé.`)

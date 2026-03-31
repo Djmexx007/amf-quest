@@ -4,11 +4,15 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import StarfieldBg from '@/components/layout/StarfieldBg'
 
+interface Branch { id: string; name: string; icon: string; color: string }
+
 interface InviteInfo {
   email: string
   full_name: string | null
   role: string
   expires_at: string
+  suggested_branch_id: string | null
+  branches: Branch[]
 }
 
 export default function InvitePage() {
@@ -19,9 +23,10 @@ export default function InvitePage() {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
 
+  const [pseudo, setPseudo] = useState('')
+  const [branchId, setBranchId] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [fullName, setFullName] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -29,10 +34,12 @@ export default function InvitePage() {
     fetch(`/api/invite/verify?token=${token}`)
       .then((r) => r.json())
       .then((d) => {
-        if (d.error) setNotFound(true)
-        else {
+        if (d.error) {
+          setNotFound(true)
+        } else {
           setInvite(d)
-          setFullName(d.full_name ?? '')
+          setPseudo(d.full_name ?? '')
+          setBranchId(d.suggested_branch_id ?? (d.branches?.[0]?.id ?? ''))
         }
       })
       .catch(() => setNotFound(true))
@@ -43,6 +50,14 @@ export default function InvitePage() {
     e.preventDefault()
     setError('')
 
+    if (!pseudo.trim()) {
+      setError('Choisis un pseudo.')
+      return
+    }
+    if (invite?.branches && invite.branches.length > 0 && !branchId) {
+      setError('Sélectionne ta branche.')
+      return
+    }
     if (password.length < 8) {
       setError('Le mot de passe doit contenir au moins 8 caractères.')
       return
@@ -57,14 +72,20 @@ export default function InvitePage() {
       const res = await fetch('/api/invite/accept', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, password, full_name: fullName }),
+        body: JSON.stringify({
+          token,
+          password,
+          full_name: pseudo.trim(),
+          branch_id: branchId || undefined,
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
         setError(data.error ?? 'Erreur lors de la création du compte.')
         return
       }
-      router.push('/login?welcome=1')
+      // Cookies are set by the server — redirect straight to dashboard
+      router.push('/dashboard')
     } catch {
       setError('Impossible de contacter le serveur.')
     } finally {
@@ -88,7 +109,7 @@ export default function InvitePage() {
           <div className="text-5xl mb-4">🚫</div>
           <h1 className="font-cinzel text-2xl text-white mb-3">Invitation invalide</h1>
           <p className="text-gray-400 text-sm">
-            Ce lien est expiré, déjà utilisé, ou n'existe pas.
+            Ce lien est expiré, déjà utilisé, ou n&apos;existe pas.
           </p>
           <a href="/login" className="mt-6 inline-block text-[#D4A843] text-sm hover:underline">
             Retour à la connexion
@@ -98,12 +119,14 @@ export default function InvitePage() {
     )
   }
 
+  const hasBranches = (invite?.branches?.length ?? 0) > 0
+
   return (
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#080A12]">
       <StarfieldBg />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-[#D4A843] opacity-[0.03] blur-[100px] pointer-events-none" />
 
-      <div className="relative z-10 w-full max-w-md px-6 animate-slide-up">
+      <div className="relative z-10 w-full max-w-md px-6 py-10 animate-slide-up">
         <div className="text-center mb-8">
           <div className="text-5xl mb-3 animate-float">⚔️</div>
           <h1 className="font-cinzel text-3xl font-bold tracking-widest mb-1"
@@ -126,22 +149,53 @@ export default function InvitePage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Pseudo */}
             <div>
               <label className="block text-gray-400 text-xs uppercase tracking-wider mb-2">
-                Ton prénom et nom
+                Pseudo <span className="normal-case text-gray-600">(nom affiché en jeu)</span>
               </label>
               <input
                 type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                value={pseudo}
+                onChange={(e) => setPseudo(e.target.value)}
+                required
                 className="w-full bg-[#080A12] border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-[#D4A843]/50 transition-colors"
-                placeholder="Marie Tremblay"
+                placeholder="Ton nom de héros"
               />
             </div>
 
+            {/* Branch selector */}
+            {hasBranches && (
+              <div>
+                <label className="block text-gray-400 text-xs uppercase tracking-wider mb-2">
+                  Ta branche
+                </label>
+                <div className="grid grid-cols-1 gap-2">
+                  {invite!.branches.map((b) => (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => setBranchId(b.id)}
+                      className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold text-left transition-all"
+                      style={{
+                        background: branchId === b.id ? `${b.color}20` : 'rgba(255,255,255,0.03)',
+                        border: `1px solid ${branchId === b.id ? b.color : 'rgba(255,255,255,0.08)'}`,
+                        color: branchId === b.id ? b.color : '#9CA3AF',
+                      }}
+                    >
+                      <span className="text-xl">{b.icon}</span>
+                      <span>{b.name}</span>
+                      {branchId === b.id && <span className="ml-auto text-xs">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Password */}
             <div>
               <label className="block text-gray-400 text-xs uppercase tracking-wider mb-2">
-                Choisis un mot de passe
+                Mot de passe
               </label>
               <input
                 type="password"
@@ -171,14 +225,14 @@ export default function InvitePage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full py-3 rounded-lg font-cinzel font-semibold text-sm tracking-widest uppercase transition-all duration-200 disabled:opacity-50"
+              className="w-full py-3 rounded-lg font-cinzel font-semibold text-sm tracking-widest uppercase transition-all duration-200 disabled:opacity-50 hover:scale-[1.02] active:scale-95"
               style={{
                 background: 'linear-gradient(135deg, #D4A843, #B8892A)',
                 color: '#080A12',
                 boxShadow: '0 0 20px rgba(212,168,67,0.3)',
               }}
             >
-              {submitting ? 'Création...' : 'Rejoindre AMF Quest'}
+              {submitting ? 'Création...' : 'Rejoindre AMF Quest ⚔️'}
             </button>
           </form>
         </div>

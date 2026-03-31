@@ -4,7 +4,7 @@ import type { JWTPayload, RefreshTokenPayload, UserRole, UserStatus } from '@/ty
 
 const JWT_SECRET = process.env.JWT_SECRET!
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET!
-const ACCESS_TOKEN_TTL = 15 * 60          // 15 minutes in seconds
+const ACCESS_TOKEN_TTL = 4 * 60 * 60       // 4 hours in seconds
 const REFRESH_TOKEN_TTL = 7 * 24 * 60 * 60 // 7 days in seconds
 
 if (!JWT_SECRET || !JWT_REFRESH_SECRET) {

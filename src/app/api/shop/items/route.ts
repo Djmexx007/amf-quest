@@ -46,11 +46,14 @@ export async function GET(request: NextRequest) {
         .single()
     : { data: null }
 
-  const enriched = (items ?? []).map(item => ({
-    ...item,
-    owned: ownedMap.has(item.id),
-    equipped: ownedMap.get(item.id) ?? false,
-  }))
+  const enriched = (items ?? [])
+    // Hide chest-only items unless the player already owns them
+    .filter(item => !(item.effect as Record<string, unknown>)?.chest_only || ownedMap.has(item.id))
+    .map(item => ({
+      ...item,
+      owned: ownedMap.has(item.id),
+      equipped: ownedMap.get(item.id) ?? false,
+    }))
 
   return NextResponse.json({
     items: enriched,

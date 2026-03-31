@@ -1,6 +1,5 @@
 import nodemailer from 'nodemailer'
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -13,17 +12,16 @@ const transporter = nodemailer.createTransport({
 export async function sendInvitationEmail({
   to,
   fullName,
-  inviteToken,
+  inviteUrl,
   role,
   inviterName,
 }: {
   to: string
   fullName: string | null
-  inviteToken: string
+  inviteUrl: string
   role: string
   inviterName: string
 }) {
-  const inviteUrl = `${APP_URL}/invite/${inviteToken}`
   const greeting = fullName ? `Bonjour ${fullName},` : 'Bonjour,'
 
   const roleLabels: Record<string, string> = {

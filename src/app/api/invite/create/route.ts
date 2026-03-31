@@ -93,22 +93,32 @@ export async function POST(request: NextRequest) {
     ip_address: request.headers.get('x-forwarded-for') ?? null,
   })
 
-  const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/invite/${invite.token}`
+  const origin = new URL(request.url).origin
+  const inviteUrl = `${origin}/invite/${invite.token}`
 
   // Fetch inviter name for the email
   const { data: inviter } = await supabaseAdmin
     .from('users').select('full_name').eq('id', payload.sub).single()
 
   // Send email (non-blocking — failure doesn't break the response)
-  if (process.env.GMAIL_USER) {
-    sendInvitationEmail({
-      to: invite.email,
-      fullName: invite.full_name ?? null,
-      inviteToken: invite.token,
-      role: invite.role,
-      inviterName: inviter?.full_name ?? 'Un administrateur',
-    }).catch(err => console.error('Email send failed:', err))
+  let emailError: string | null = null
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    try {
+      await sendInvitationEmail({
+        to: invite.email,
+        fullName: invite.full_name ?? null,
+        inviteUrl,
+        role: invite.role,
+        inviterName: inviter?.full_name ?? 'Un administrateur',
+      })
+    } catch (err) {
+      console.error('Email send failed:', err)
+      emailError = err instanceof Error ? err.message : String(err)
+    }
+  } else {
+    emailError = 'GMAIL_USER ou GMAIL_APP_PASSWORD manquant dans les variables d\'environnement'
+    console.error('Email not sent:', emailError)
   }
 
-  return NextResponse.json({ invite, invite_url: inviteUrl })
+  return NextResponse.json({ invite, invite_url: inviteUrl, email_error: emailError })
 }

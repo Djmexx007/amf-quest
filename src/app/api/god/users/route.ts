@@ -44,9 +44,9 @@ export async function PATCH(request: NextRequest) {
 
   if (!body.user_id) return NextResponse.json({ error: 'user_id requis.' }, { status: 400 })
 
-  // Prevent self-modification
-  if (body.user_id === payload.sub) {
-    return NextResponse.json({ error: 'Impossible de modifier son propre compte.' }, { status: 400 })
+  // Prevent self role-change (but allow self character reset)
+  if (body.action === 'change_role' && body.user_id === payload.sub) {
+    return NextResponse.json({ error: 'Impossible de modifier son propre rôle.' }, { status: 400 })
   }
 
   if (body.action === 'change_role') {
@@ -105,10 +105,11 @@ export async function PATCH(request: NextRequest) {
 
     if (error) return NextResponse.json({ error: 'Erreur lors de la réinitialisation.' }, { status: 500 })
 
-    // Delete daily missions and game sessions history
+    // Delete daily missions, achievements, and all purchased inventory
     await Promise.all([
       supabaseAdmin.from('daily_missions').delete().eq('user_id', body.user_id),
       supabaseAdmin.from('user_achievements').delete().eq('user_id', body.user_id),
+      supabaseAdmin.from('user_inventory').delete().eq('user_id', body.user_id),
     ])
 
     await supabaseAdmin.from('admin_logs').insert({

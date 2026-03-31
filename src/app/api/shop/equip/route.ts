@@ -26,37 +26,48 @@ export async function POST(request: NextRequest) {
 
   if (!inv) return NextResponse.json({ error: 'Item non possédé.' }, { status: 403 })
 
-  // Get item type to unequip others of same type
+  // Get item type + effect to unequip others of same type
   const { data: item } = await supabaseAdmin
     .from('shop_items')
-    .select('item_type')
+    .select('item_type, effect')
     .eq('id', item_id)
     .single()
 
   if (!item) return NextResponse.json({ error: 'Item introuvable.' }, { status: 404 })
 
-  // Unequip all items of same type first
+  // Unequip conflicting items of same type
   if (equip) {
-    const { data: sameType } = await supabaseAdmin
+    const { data: equipped } = await supabaseAdmin
       .from('user_inventory')
       .select('item_id')
       .eq('user_id', payload.sub)
       .eq('is_equipped', true)
 
-    if (sameType && sameType.length > 0) {
-      const sameTypeIds = sameType.map(i => i.item_id)
+    if (equipped && equipped.length > 0) {
+      const equippedIds = equipped.map(i => i.item_id)
       const { data: sameTypeItems } = await supabaseAdmin
         .from('shop_items')
-        .select('id, item_type')
-        .in('id', sameTypeIds)
+        .select('id, item_type, effect')
+        .in('id', equippedIds)
         .eq('item_type', item.item_type)
 
       if (sameTypeItems && sameTypeItems.length > 0) {
-        await supabaseAdmin
-          .from('user_inventory')
-          .update({ is_equipped: false })
-          .eq('user_id', payload.sub)
-          .in('item_id', sameTypeItems.map(i => i.id))
+        let toUnequip = sameTypeItems
+        // Sound items: only unequip those sharing the same trigger (correct vs wrong)
+        // so the player can equip one sound for correct AND one for wrong simultaneously
+        if (item.item_type === 'sound') {
+          const trigger = (item.effect as Record<string, unknown>)?.trigger
+          toUnequip = sameTypeItems.filter(
+            i => (i.effect as Record<string, unknown>)?.trigger === trigger
+          )
+        }
+        if (toUnequip.length > 0) {
+          await supabaseAdmin
+            .from('user_inventory')
+            .update({ is_equipped: false })
+            .eq('user_id', payload.sub)
+            .in('item_id', toUnequip.map(i => i.id))
+        }
       }
     }
   }

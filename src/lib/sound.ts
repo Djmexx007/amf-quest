@@ -37,7 +37,38 @@ function tone(
   } catch { /* ignore AudioContext errors */ }
 }
 
-export function playSound(type: 'buy' | 'equip' | 'hoverRare' | 'openChest' | 'legendaryDrop' | 'error') {
+// Pitch-sliding tone (for trombone / airhorn effects)
+function slideTone(
+  freqStart: number,
+  freqEnd: number,
+  duration: number,
+  type: OscillatorType = 'sawtooth',
+  volume = 0.12,
+  delay = 0,
+) {
+  const c = getCtx()
+  if (!c) return
+  try {
+    const osc  = c.createOscillator()
+    const gain = c.createGain()
+    osc.connect(gain)
+    gain.connect(c.destination)
+    osc.type = type
+    osc.frequency.setValueAtTime(freqStart, c.currentTime + delay)
+    osc.frequency.linearRampToValueAtTime(freqEnd, c.currentTime + delay + duration)
+    gain.gain.setValueAtTime(0, c.currentTime + delay)
+    gain.gain.linearRampToValueAtTime(volume, c.currentTime + delay + 0.01)
+    gain.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + delay + duration)
+    osc.start(c.currentTime + delay)
+    osc.stop(c.currentTime + delay + duration + 0.05)
+  } catch { /* ignore AudioContext errors */ }
+}
+
+export type SoundType =
+  | 'buy' | 'equip' | 'hoverRare' | 'openChest' | 'legendaryDrop' | 'error'
+  | 'airhorn' | 'sadTrombone' | 'rimshot' | 'cashRegister' | 'laser' | 'fart' | 'ding' | 'powerUp'
+
+export function playSound(type: SoundType) {
   switch (type) {
     case 'buy':
       // Satisfying ascending chime
@@ -79,6 +110,75 @@ export function playSound(type: 'buy' | 'equip' | 'hoverRare' | 'openChest' | 'l
     case 'error':
       tone(220, 0.12, 'sawtooth', 0.09)
       tone(180, 0.18, 'sawtooth', 0.07, 0.14)
+      break
+
+    // ── Funny / cosmetic sounds ──────────────────────────────────
+
+    case 'airhorn':
+      // BWAAAH — classic obnoxious horn
+      slideTone(180, 155, 0.12, 'sawtooth', 0.18)
+      slideTone(155, 140, 0.20, 'sawtooth', 0.16, 0.10)
+      slideTone(140, 130, 0.35, 'sawtooth', 0.14, 0.26)
+      tone(125, 0.30, 'sawtooth', 0.10, 0.55)
+      break
+
+    case 'sadTrombone':
+      // Wah wah wah waaah descending slide
+      slideTone(370, 340, 0.18, 'sawtooth', 0.11)
+      slideTone(330, 300, 0.18, 'sawtooth', 0.11, 0.22)
+      slideTone(295, 265, 0.18, 'sawtooth', 0.11, 0.44)
+      slideTone(260, 195, 0.40, 'sawtooth', 0.12, 0.66)
+      break
+
+    case 'rimshot':
+      // Ba dum — tss
+      tone(80,  0.06, 'sine',     0.16)           // kick 1
+      tone(65,  0.08, 'sine',     0.13, 0.08)     // kick tail
+      tone(90,  0.05, 'sine',     0.14, 0.22)     // kick 2
+      tone(75,  0.08, 'sine',     0.11, 0.27)     // kick tail
+      tone(2800, 0.12, 'square',  0.04, 0.42)     // snare crack
+      tone(4000, 0.22, 'square',  0.025, 0.44)    // hi-hat hiss
+      break
+
+    case 'cashRegister':
+      // Cha-ching! classic register bell
+      tone(1318, 0.05, 'sine', 0.10)
+      tone(2093, 0.08, 'sine', 0.13, 0.07)
+      tone(1661, 0.06, 'sine', 0.08, 0.17)
+      tone(2637, 0.30, 'sine', 0.12, 0.25)
+      tone(1976, 0.20, 'sine', 0.07, 0.30)
+      break
+
+    case 'laser':
+      // Pew pew — rapid descending zap
+      slideTone(1400, 400, 0.14, 'square', 0.10)
+      slideTone(1200, 350, 0.12, 'square', 0.08, 0.18)
+      break
+
+    case 'fart':
+      // 💨 low wobbling noise burst
+      slideTone(75, 55, 0.08, 'sawtooth', 0.15)
+      slideTone(60, 45, 0.12, 'sawtooth', 0.13, 0.06)
+      slideTone(50, 40, 0.16, 'sawtooth', 0.11, 0.16)
+      slideTone(42, 35, 0.20, 'sawtooth', 0.08, 0.29)
+      break
+
+    case 'ding':
+      // Pure clean bell
+      tone(1046, 0.04, 'sine', 0.14)
+      tone(1046, 0.60, 'sine', 0.09, 0.04)
+      tone(2093, 0.25, 'sine', 0.04, 0.04)
+      break
+
+    case 'powerUp':
+      // 8-bit ascending arpeggio — classic Nintendo power-up
+      tone(261, 0.07, 'square', 0.08)
+      tone(329, 0.07, 'square', 0.08, 0.08)
+      tone(392, 0.07, 'square', 0.08, 0.16)
+      tone(523, 0.07, 'square', 0.10, 0.24)
+      tone(659, 0.07, 'square', 0.10, 0.32)
+      tone(784, 0.07, 'square', 0.11, 0.40)
+      tone(1046, 0.25, 'square', 0.13, 0.48)
       break
   }
 }

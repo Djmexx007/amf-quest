@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { ShieldCheck, BookOpen, Users, BarChart3, Settings, Clock, ArrowRightLeft } from 'lucide-react'
+import { ShieldCheck, BookOpen, Users, BarChart3, Clock, ArrowRightLeft } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 
 interface Stats {
@@ -72,16 +72,6 @@ export default function AdminPage() {
       color: '#25C292',
       badge: stats ? `${stats.active_users} actifs` : null,
       badgeColor: '#25C292',
-      show: isAdminPlus,
-    },
-    {
-      href: '/admin/settings',
-      label: 'Paramètres',
-      description: 'Configuration emails et sécurité',
-      icon: <Settings size={22} />,
-      color: '#A78BFA',
-      badge: null,
-      badgeColor: '',
       show: isAdminPlus,
     },
   ].filter(l => l.show)

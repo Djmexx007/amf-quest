@@ -46,8 +46,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Personnage introuvable.' }, { status: 404 })
   }
 
-  // Already claimed today
+  // Already claimed today on this branch
   if (character.last_daily_reward_date === today) {
+    return NextResponse.json({
+      already_claimed: true,
+      message: 'Récompense déjà réclamée aujourd\'hui.',
+      next_claim_at: `${today}T24:00:00Z`,
+    })
+  }
+
+  // Cross-branch check: prevent double-claiming after a branch switch/change
+  const { count: claimedElsewhere } = await supabaseAdmin
+    .from('characters')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', payload.sub)
+    .eq('last_daily_reward_date', today)
+    .neq('branch_id', payload.branch_id)
+
+  if (claimedElsewhere && claimedElsewhere > 0) {
+    // Sync this character so future checks are instant
+    await supabaseAdmin
+      .from('characters')
+      .update({ last_daily_reward_date: today })
+      .eq('id', character.id)
     return NextResponse.json({
       already_claimed: true,
       message: 'Récompense déjà réclamée aujourd\'hui.',

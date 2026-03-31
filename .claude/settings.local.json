@@ -36,7 +36,8 @@
       "Bash(node \"e:/projets/amf-quest/__replace_god.py\")",
       "Bash(node __replace_god.js)",
       "Bash(rm __replace_god.js __replace_god.py)",
-      "Bash(echo \"exit: $?\")"
+      "Bash(echo \"exit: $?\")",
+      "Bash(grep -r \"end-game\\\\|endgame\\\\|end_game\\\\|finish\\\\|submit.*score\\\\|save.*result\" e:/projets/amf-quest/src/app/api --include=*.ts -l)"
     ]
   }
 }

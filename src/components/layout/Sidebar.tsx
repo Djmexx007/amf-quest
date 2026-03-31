@@ -316,6 +316,7 @@ function BranchChangeModal({
         <textarea
           value={reason}
           onChange={e => setReason(e.target.value)}
+          onKeyDown={e => e.stopPropagation()}
           placeholder="Raison du changement (optionnel)"
           rows={2}
           className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2 text-white text-sm resize-none focus:outline-none focus:border-[#D4A843]/50 mb-4"

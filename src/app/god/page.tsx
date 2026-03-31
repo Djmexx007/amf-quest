@@ -757,7 +757,97 @@ function GameConfigTab({ addToast }: { addToast: AddToast }) {
         style={{ background: 'linear-gradient(135deg, #D4A843, #B8892A)', color: '#080A12', boxShadow: '0 0 20px rgba(212,168,67,0.2)' }}>
         {saving ? 'Enregistrement...' : 'Appliquer la configuration'}
       </button>
+
+      <ChestPricingSection addToast={addToast} />
     </form>
+  )
+}
+
+// ── Chest Pricing Section ─────────────────────────────────────
+function ChestPricingSection({ addToast }: { addToast: AddToast }) {
+  const [chests, setChests] = useState<{ id: string; name: string; icon: string; rarity: string; cost_coins: number }[]>([])
+  const [prices, setPrices] = useState<Record<string, number>>({})
+  const [saving, setSaving] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/god/shop-items?mystery_box=true')
+      .then(r => r.json())
+      .then(d => {
+        const items = d.items ?? []
+        setChests(items)
+        const init: Record<string, number> = {}
+        items.forEach((i: { id: string; cost_coins: number }) => { init[i.id] = i.cost_coins })
+        setPrices(init)
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function savePrice(itemId: string) {
+    setSaving(itemId)
+    const res = await fetch('/api/god/shop-items', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id: itemId, cost_coins: prices[itemId] }),
+    })
+    setSaving(null)
+    if (res.ok) {
+      addToast({ type: 'success', title: 'Prix mis à jour en temps réel.' })
+    } else {
+      const d = await res.json()
+      addToast({ type: 'error', title: d.error ?? 'Erreur.' })
+    }
+  }
+
+  if (loading) return null
+
+  const RC_COLOR: Record<string, string> = { common: '#9CA3AF', rare: '#4D8BFF', epic: '#A78BFA', legendary: '#D4A843' }
+
+  return (
+    <div className="rpg-card p-6 mt-2">
+      <div className="flex items-center gap-2 mb-4">
+        <Gift size={16} className="text-[#D4A843]" />
+        <h3 className="font-cinzel font-bold text-white text-sm">Prix des coffres</h3>
+        <span className="text-gray-600 text-xs ml-1">(appliqué en temps réel)</span>
+      </div>
+      {chests.length === 0 ? (
+        <p className="text-gray-500 text-sm">Aucun coffre trouvé dans la boutique.</p>
+      ) : (
+        <div className="space-y-3">
+          {chests.map(chest => {
+            const color = RC_COLOR[chest.rarity] ?? '#9CA3AF'
+            return (
+              <div key={chest.id} className="flex items-center gap-3 p-3 rounded-lg"
+                style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <span className="text-2xl">{chest.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-white text-sm truncate">{chest.name}</p>
+                  <span className="text-xs font-semibold" style={{ color }}>{chest.rarity}</span>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Wallet size={13} className="text-yellow-500" />
+                  <input
+                    type="number"
+                    min={0}
+                    value={prices[chest.id] ?? chest.cost_coins}
+                    onChange={e => setPrices(prev => ({ ...prev, [chest.id]: parseInt(e.target.value) || 0 }))}
+                    className="w-24 text-right bg-[#080A12] border border-white/10 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-[#D4A843]/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => savePrice(chest.id)}
+                    disabled={saving === chest.id}
+                    className="px-3 py-1 rounded text-xs font-semibold transition-all disabled:opacity-50"
+                    style={{ background: 'rgba(212,168,67,0.15)', border: '1px solid rgba(212,168,67,0.3)', color: '#D4A843' }}>
+                    {saving === chest.id ? '...' : 'OK'}
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
 

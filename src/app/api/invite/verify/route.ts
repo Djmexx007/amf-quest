@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
 
   const { data: invite, error } = await supabaseAdmin
     .from('invitations')
-    .select('email, full_name, role, expires_at, status')
+    .select('email, full_name, role, expires_at, status, suggested_branch_id')
     .eq('token', token)
     .single()
 
@@ -23,10 +23,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Invitation expirée.' }, { status: 410 })
   }
 
+  const { data: branches } = await supabaseAdmin
+    .from('branches')
+    .select('id, name, icon, color')
+    .eq('is_active', true)
+    .order('name')
+
   return NextResponse.json({
     email: invite.email,
     full_name: invite.full_name,
     role: invite.role,
     expires_at: invite.expires_at,
+    suggested_branch_id: invite.suggested_branch_id ?? null,
+    branches: branches ?? [],
   })
 }

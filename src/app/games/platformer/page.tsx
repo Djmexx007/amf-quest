@@ -327,6 +327,7 @@ export default function PlatformerPage() {
   const [upgrades, setUpgrades] = useState<SavedUpgrades>({})
   const [upgradeChoices, setUpgradeChoices] = useState<Upgrade[]>([])
   const [unlockedAchievements, setUnlockedAchievements] = useState<{ slug: string; title: string; xp: number; coins: number }[]>([])
+  const [runReward, setRunReward] = useState<{ xp: number; coins: number; levelUp: boolean } | null>(null)
   const [unlockedLevelId, setUnlockedLevelId] = useState<number | null>(null)
   const [branchColor, setBranchColor] = useState('#D4A843')
 
@@ -761,6 +762,7 @@ export default function PlatformerPage() {
       }),
     }).then(r => r.json()).then(data => {
       if (data.achievements_unlocked?.length > 0) setUnlockedAchievements(data.achievements_unlocked)
+      if (data.xp_earned) setRunReward({ xp: data.xp_earned, coins: data.coins_earned ?? 0, levelUp: data.level_up ?? false })
     }).catch(() => {})
 
     // Unlock next level
@@ -934,6 +936,14 @@ export default function PlatformerPage() {
           <h2 className="font-cinzel text-2xl font-bold text-[#D4A843]">Run terminée!</h2>
           <p className="text-gray-400 text-sm mt-1">Score final : <span className="text-white font-bold">{finalScore}</span></p>
           <p className="text-gray-500 text-xs mt-1">{finalCoins} pièces · {finalQCount} questions</p>
+          {runReward && (
+            <div className="mt-3 flex items-center justify-center gap-4">
+              <span className="text-[#D4A843] font-bold">+{runReward.xp} XP</span>
+              <span className="text-gray-500">·</span>
+              <span className="text-amber-400 font-bold">+{runReward.coins} 💰</span>
+              {runReward.levelUp && <span className="text-green-400 font-bold animate-pulse">⬆️ Niveau sup!</span>}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-3">

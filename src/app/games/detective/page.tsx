@@ -44,7 +44,7 @@ SIGNATURE DU CLIENT: J.P. Leblanc
 SIGNATURE DU CONSEILLER: M. Tremblay`,
     violations: [
       { id: 'v1', text: 'toute occupation', explanation: 'Un menuisier devrait avoir une police "propre occupation" — "toute occupation" pourrait le forcer à accepter n\'importe quel emploi malgré son invalidité pour son métier.', x: 32, y: 28 },
-      { id: 'v2', text: 'N\'a pas jugé pertinent de le noter', explanation: 'Omission volontaire d\'une déclaration de santé matérielle. Violation grave de l\'obligation de divulgation — cela peut annuler la police.', x: 15, y: 72 },
+      { id: 'v2', text: 'n\'a pas jugé pertinent de le noter', explanation: 'Omission volontaire d\'une déclaration de santé matérielle. Violation grave de l\'obligation de divulgation — cela peut annuler la police.', x: 15, y: 72 },
     ]
   }
 ]

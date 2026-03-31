@@ -6,6 +6,8 @@ import ResultScreen from '@/components/games/ResultScreen'
 import ProgressBar from '@/components/ui/ProgressBar'
 import AchievementUnlockToast from '@/components/ui/AchievementUnlockToast'
 import { useAuth } from '@/hooks/useAuth'
+import { useUIStore } from '@/stores/uiStore'
+import { playSound, type SoundType } from '@/lib/sound'
 import { Timer, Zap } from 'lucide-react'
 
 interface Answer { id: string; answer_text: string; is_correct: boolean }
@@ -24,6 +26,7 @@ const TIME_PER_Q = [0, 20, 18, 12] // seconds per question by difficulty
 
 export default function QuizPage() {
   const { user } = useAuth()
+  const { soundOnCorrect, soundOnWrong } = useUIStore()
   const [phase, setPhase] = useState<Phase>('config')
   const [difficulty, setDifficulty] = useState<1 | 2 | 3>(1)
   const [questions, setQuestions] = useState<Question[]>([])
@@ -79,8 +82,9 @@ export default function QuizPage() {
     setCorrectId(cAnswer?.id ?? null)
     setAnswerState('wrong')
     setStreak(0)
+    if (soundOnWrong) playSound(soundOnWrong as SoundType)
     advanceQuestion()
-  }, [answerState, questions, qIndex, advanceQuestion])
+  }, [answerState, questions, qIndex, advanceQuestion, soundOnWrong])
 
   useEffect(() => {
     if (phase !== 'playing' || answerState !== 'idle') return
@@ -111,9 +115,11 @@ export default function QuizPage() {
       setStreak(newStreak)
       setBestStreak(bs => Math.max(bs, newStreak))
       setAnswerState('correct')
+      if (soundOnCorrect) playSound(soundOnCorrect as SoundType)
     } else {
       setStreak(0)
       setAnswerState('wrong')
+      if (soundOnWrong) playSound(soundOnWrong as SoundType)
     }
     advanceQuestion()
   }

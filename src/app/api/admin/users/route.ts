@@ -46,6 +46,15 @@ export async function PATCH(request: NextRequest) {
   let body: { user_id: string; action: 'suspend' | 'unsuspend' | 'ban' | 'unban'; reason?: string }
   try { body = await request.json() } catch { return NextResponse.json({ error: 'Corps invalide.' }, { status: 400 }) }
 
+  // Moderators cannot act on god accounts
+  if (payload.role === 'moderator') {
+    const { data: target } = await supabaseAdmin
+      .from('users').select('role').eq('id', body.user_id).single()
+    if (target?.role === 'god') {
+      return NextResponse.json({ error: 'Action interdite sur un compte GOD.' }, { status: 403 })
+    }
+  }
+
   const updates: Record<string, unknown> = {}
   if (body.action === 'suspend') {
     updates.status = 'suspended'
