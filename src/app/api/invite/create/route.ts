@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     .from('users').select('full_name').eq('id', payload.sub).single()
 
   // Send email (non-blocking — failure doesn't break the response)
-  if (process.env.RESEND_API_KEY) {
+  if (process.env.GMAIL_USER) {
     sendInvitationEmail({
       to: invite.email,
       fullName: invite.full_name ?? null,
