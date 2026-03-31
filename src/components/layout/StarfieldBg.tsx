@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { useUIStore } from '@/stores/uiStore'
 
 interface Star {
   x: number
@@ -11,8 +12,19 @@ interface Star {
   twinkleOffset: number
 }
 
+// [r, g, b] per theme
+const STAR_RGB: Record<string, [number, number, number]> = {
+  galaxy: [180, 120, 255],
+  abyss:  [0,   200, 255],
+  golden: [212, 168, 67],
+  fire:   [255, 100, 30],
+  cosmic: [100, 150, 255],
+}
+
 export default function StarfieldBg() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const { bgTheme } = useUIStore()
+  const [r, g, b] = STAR_RGB[bgTheme ?? ''] ?? [255, 255, 255]
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -53,10 +65,9 @@ export default function StarfieldBg() {
         const alpha = star.opacity * (0.6 + 0.4 * twinkle)
         ctx.beginPath()
         ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2)
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`
         ctx.fill()
 
-        // Slowly drift upward
         star.y -= star.speed
         if (star.y < -2) {
           star.y = canvas.height + 2
@@ -71,15 +82,14 @@ export default function StarfieldBg() {
     initStars()
     animFrame = requestAnimationFrame(draw)
 
-    window.addEventListener('resize', () => {
-      resize()
-      initStars()
-    })
+    const onResize = () => { resize(); initStars() }
+    window.addEventListener('resize', onResize)
 
     return () => {
       cancelAnimationFrame(animFrame)
+      window.removeEventListener('resize', onResize)
     }
-  }, [])
+  }, [r, g, b])
 
   return (
     <canvas

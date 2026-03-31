@@ -5,7 +5,7 @@ import {
   Crown, UserPlus, Users, GitBranch, Activity,
   Copy, Check, ScrollText, Wrench, Plus, ToggleLeft,
   ToggleRight, ChevronLeft, ChevronRight, Trash2,
-  AlertTriangle, RefreshCw, X, Gift, Wallet, Globe,
+  AlertTriangle, RefreshCw, X, Gift, Wallet,
 } from 'lucide-react'
 import { useUIStore } from '@/stores/uiStore'
 import type { Toast } from '@/types'
@@ -33,7 +33,7 @@ interface BulkUser {
   id: string; email: string; full_name: string; role: string; status: string
 }
 
-type Tab = 'overview' | 'branches' | 'logs' | 'tools' | 'config' | 'questions' | 'rewards'
+type Tab = 'overview' | 'branches' | 'logs' | 'tools' | 'config' | 'questions' | 'users'
 
 // ── Helpers ───────────────────────────────────────────────────
 const STATUS_COLOR: Record<string, string> = {
@@ -68,7 +68,7 @@ export default function GodPage() {
           { key: 'config',     label: 'Config jeux',     icon: <Wrench size={14} /> },
           { key: 'questions',  label: 'Questions',       icon: <ScrollText size={14} /> },
           { key: 'logs',       label: 'Logs',            icon: <ScrollText size={14} /> },
-          { key: 'rewards',    label: 'Récompenses',     icon: <Plus size={14} /> },
+          { key: 'users',      label: 'Utilisateurs',    icon: <Users size={14} /> },
           { key: 'tools',      label: 'Dev',             icon: <Wrench size={14} /> },
         ] as { key: Tab; label: string; icon: React.ReactNode }[]).map(t => (
           <button
@@ -84,13 +84,13 @@ export default function GodPage() {
         ))}
       </div>
 
+      {tab === 'users'     && <UsersHubTab addToast={addToast} />}
       {tab === 'overview'  && <OverviewTab addToast={addToast} />}
       {tab === 'branches'  && <BranchesTab addToast={addToast} />}
       {tab === 'config'    && <GameConfigTab addToast={addToast} />}
       {tab === 'questions' && <QuestionsApprovalTab addToast={addToast} />}
       {tab === 'logs'      && <LogsTab />}
       {tab === 'tools'     && <ToolsTab addToast={addToast} />}
-      {tab === 'rewards'   && <RewardsTab addToast={addToast} />}
     </div>
   )
 }
@@ -1054,60 +1054,120 @@ function ToolsTab({ addToast }: { addToast: AddToast }) {
   )
 }
 
-// ── Tab: Récompenses ──────────────────────────────────────────
-function RewardsTab({ addToast }: { addToast: AddToast }) {
-  const [rewardType, setRewardType] = useState<'individual' | 'global' | 'branch'>('individual')
-  const [userSearch, setUserSearch]   = useState('')
-  const [userResults, setUserResults] = useState<{ id: string; email: string; full_name: string; role: string }[]>([])
-  const [selectedUser, setSelectedUser] = useState<{ id: string; email: string; full_name: string } | null>(null)
-  const [branches, setBranches] = useState<Branch[]>([])
-  const [selectedBranch, setSelectedBranch] = useState('')
-  const [xp, setXp]       = useState(0)
-  const [coins, setCoins] = useState(0)
+// ── Tab: User Management Hub (Users + Récompenses fusionnés) ──
+
+// ── Tab: User Management Hub (Users + Récompenses fusionnés) ──
+function UsersHubTab({ addToast }: { addToast: AddToast }) {
+  const [users, setUsers]       = useState<BulkUser[]>([])
+  const [total, setTotal]       = useState(0)
+  const [search, setSearch]     = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [selected, setSelected] = useState<BulkUser | null>(null)
+  const [newRole, setNewRole]   = useState('')
+  const [saving, setSaving]     = useState(false)
+  const [confirm, setConfirm]   = useState<'role' | 'reset' | null>(null)
+
+  // Reward (individual)
+  const [xp, setXp]           = useState(0)
+  const [coins, setCoins]     = useState(0)
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
-  const [searchTimer, setSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => {
-    fetch('/api/god/branches').then(r => r.json()).then(d => setBranches(d.branches ?? []))
+  // Reward (global / branch)
+  const [globalType, setGlobalType]         = useState<'global' | 'branch'>('global')
+  const [branches, setBranches]             = useState<Branch[]>([])
+  const [selectedBranch, setSelectedBranch] = useState('')
+  const [globalXp, setGlobalXp]             = useState(0)
+  const [globalCoins, setGlobalCoins]       = useState(0)
+  const [globalMsg, setGlobalMsg]           = useState('')
+  const [sendingGlobal, setSendingGlobal]   = useState(false)
+
+  const ROLE_COLOR: Record<string, string> = { god: '#D4A843', moderator: '#F59E0B', user: '#4D8BFF' }
+  const ROLE_BG:    Record<string, string> = { god: 'rgba(212,168,67,0.1)', moderator: 'rgba(245,158,11,0.1)', user: 'rgba(77,139,255,0.1)' }
+
+  const fetchUsers = useCallback((q: string) => {
+    setLoading(true)
+    fetch(`/api/god/users?search=${encodeURIComponent(q)}&page=1`)
+      .then(r => r.json())
+      .then(d => { setUsers(d.users ?? []); setTotal(d.total ?? 0) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
 
-  // Debounced user search
-  function handleUserSearch(val: string) {
-    setUserSearch(val)
-    setSelectedUser(null)
+  useEffect(() => {
+    fetchUsers('')
+    fetch('/api/god/branches').then(r => r.json()).then(d => setBranches(d.branches ?? []))
+  }, [fetchUsers])
+
+  const [searchTimer, setSearchTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
+  function handleSearch(val: string) {
+    setSearch(val)
     if (searchTimer) clearTimeout(searchTimer)
-    if (!val.trim()) { setUserResults([]); return }
-    const t = setTimeout(async () => {
-      const res = await fetch(`/api/admin/users?search=${encodeURIComponent(val)}&page=1`)
-      const data = await res.json()
-      setUserResults((data.users ?? []).slice(0, 6))
-    }, 350)
-    setSearchTimer(t)
+    setSearchTimer(setTimeout(() => fetchUsers(val), 350))
   }
 
-  async function handleSend() {
-    if (xp === 0 && coins === 0) {
+  async function applyRole() {
+    if (!selected || !newRole) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/god/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'change_role', user_id: selected.id, role: newRole }),
+      })
+      const data = await res.json()
+      if (!res.ok) { addToast({ type: 'error', title: data.error ?? 'Erreur.' }); return }
+      addToast({ type: 'success', title: `✅ Rôle de ${selected.full_name} → ${newRole}` })
+      setSelected(null); setConfirm(null); fetchUsers(search)
+    } finally { setSaving(false) }
+  }
+
+  async function resetChar() {
+    if (!selected) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/god/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reset_character', user_id: selected.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) { addToast({ type: 'error', title: data.error ?? 'Erreur.' }); return }
+      addToast({ type: 'success', title: `🔄 ${selected.full_name} réinitialisé (${data.characters_reset} personnage(s))` })
+      setSelected(null); setConfirm(null)
+    } finally { setSaving(false) }
+  }
+
+  async function sendIndividualReward() {
+    if (!selected || (xp === 0 && coins === 0)) {
       addToast({ type: 'error', title: 'Indiquer au moins XP ou coins.' }); return
     }
-    if (rewardType === 'individual' && !selectedUser) {
-      addToast({ type: 'error', title: 'Sélectionner un utilisateur.' }); return
-    }
-    if (rewardType === 'branch' && !selectedBranch) {
-      addToast({ type: 'error', title: 'Sélectionner une branche.' }); return
-    }
-
     setSending(true)
     try {
-      const body: Record<string, unknown> = {
-        type: rewardType,
-        xp,
-        coins,
-        message: message.trim() || undefined,
-      }
-      if (rewardType === 'individual') body.user_id = selectedUser!.id
-      if (rewardType === 'branch')     body.branch_id = selectedBranch
+      const res = await fetch('/api/god/rewards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'individual', user_id: selected.id, xp, coins, message: message.trim() || undefined }),
+      })
+      const data = await res.json()
+      if (!res.ok) { addToast({ type: 'error', title: data.error ?? 'Erreur.' }); return }
+      addToast({ type: 'success', title: `🎁 ${selected.full_name} : +${xp} XP, +${coins} coins` })
+      setXp(0); setCoins(0); setMessage('')
+    } catch { addToast({ type: 'error', title: 'Erreur serveur.' }) }
+    finally { setSending(false) }
+  }
 
+  async function sendGlobalReward() {
+    if (globalXp === 0 && globalCoins === 0) {
+      addToast({ type: 'error', title: 'Indiquer au moins XP ou coins.' }); return
+    }
+    if (globalType === 'branch' && !selectedBranch) {
+      addToast({ type: 'error', title: 'Sélectionner une branche.' }); return
+    }
+    setSendingGlobal(true)
+    try {
+      const body: Record<string, unknown> = { type: globalType, xp: globalXp, coins: globalCoins, message: globalMsg.trim() || undefined }
+      if (globalType === 'branch') body.branch_id = selectedBranch
       const res = await fetch('/api/god/rewards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1115,176 +1175,233 @@ function RewardsTab({ addToast }: { addToast: AddToast }) {
       })
       const data = await res.json()
       if (!res.ok) { addToast({ type: 'error', title: data.error ?? 'Erreur.' }); return }
-
       addToast({ type: 'success', title: `✅ ${data.affected} personnage(s) récompensé(s) !` })
-      setXp(0); setCoins(0); setMessage(''); setSelectedUser(null); setUserSearch('')
+      setGlobalXp(0); setGlobalCoins(0); setGlobalMsg('')
     } catch { addToast({ type: 'error', title: 'Erreur serveur.' }) }
-    finally { setSending(false) }
-  }
-
-  const TYPE_INFO = {
-    individual: { icon: <Users size={16} />,  color: '#4D8BFF', label: 'Individuel',   desc: 'Récompenser un utilisateur spécifique' },
-    global:     { icon: <Globe size={16} />,   color: '#25C292', label: 'Global',        desc: 'Récompenser TOUS les joueurs actifs' },
-    branch:     { icon: <GitBranch size={16}/>, color: '#D4A843', label: 'Par branche',  desc: 'Récompenser tous les joueurs d\'une branche' },
+    finally { setSendingGlobal(false) }
   }
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="rpg-card p-5 flex items-center gap-3"
-        style={{ border: '1px solid rgba(212,168,67,0.2)', background: 'rgba(212,168,67,0.04)' }}>
-        <Gift size={20} className="text-[#D4A843]" />
-        <div>
-          <p className="text-white font-semibold text-sm">Système de récompenses</p>
-          <p className="text-gray-500 text-xs">Distribuer XP et coins. Chaque récompense envoie une notification au joueur.</p>
-        </div>
+      {/* Search */}
+      <div className="flex gap-3">
+        <input
+          type="text" value={search} onChange={e => handleSearch(e.target.value)}
+          placeholder="Rechercher par nom ou email..."
+          className="flex-1 bg-[#080A12] border border-white/10 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-[#D4A843]/50"
+        />
+        <button onClick={() => fetchUsers(search)}
+          className="p-2.5 rounded-lg border border-white/10 text-gray-400 hover:text-white transition-colors">
+          <RefreshCw size={14} />
+        </button>
       </div>
 
-      {/* Type selector */}
-      <div className="grid grid-cols-3 gap-3">
-        {(['individual', 'global', 'branch'] as const).map(t => {
-          const info = TYPE_INFO[t]
-          return (
-            <button key={t} onClick={() => setRewardType(t)}
-              className="rpg-card p-4 text-center transition-all"
-              style={rewardType === t
-                ? { border: `1px solid ${info.color}50`, background: `${info.color}10` }
-                : { opacity: 0.5 }}>
-              <div className="flex justify-center mb-2" style={{ color: info.color }}>{info.icon}</div>
-              <p className="text-white text-sm font-semibold">{info.label}</p>
-              <p className="text-gray-500 text-xs mt-0.5 leading-tight">{info.desc}</p>
+      <p className="text-gray-600 text-xs">{total} utilisateur(s) au total</p>
+
+      {/* User list */}
+      <div className="rpg-card overflow-hidden">
+        {loading ? (
+          <div className="py-12 text-center text-gray-500 text-sm animate-pulse">Chargement...</div>
+        ) : users.length === 0 ? (
+          <div className="py-12 text-center text-gray-500 text-sm">Aucun utilisateur trouvé.</div>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {users.map(u => (
+              <div key={u.id}
+                className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.02] transition-colors cursor-pointer"
+                style={selected?.id === u.id ? { background: 'rgba(212,168,67,0.04)' } : {}}
+                onClick={() => { setSelected(u); setNewRole(u.role); setConfirm(null); setXp(0); setCoins(0); setMessage('') }}>
+                <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+                  style={{ background: ROLE_BG[u.role] ?? 'rgba(255,255,255,0.05)', color: ROLE_COLOR[u.role] ?? '#6B7280' }}>
+                  {u.full_name.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-sm font-medium truncate">{u.full_name}</p>
+                  <p className="text-gray-500 text-xs truncate">{u.email}</p>
+                </div>
+                <span className="text-xs px-2 py-0.5 rounded font-semibold flex-shrink-0"
+                  style={{ background: ROLE_BG[u.role] ?? 'rgba(255,255,255,0.05)', color: ROLE_COLOR[u.role] ?? '#6B7280' }}>
+                  {u.role.toUpperCase()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Detail panel for selected user */}
+      {selected && (
+        <div className="rpg-card p-5 space-y-5" style={{ border: '1px solid rgba(212,168,67,0.2)', background: 'rgba(212,168,67,0.02)' }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
+                style={{ background: ROLE_BG[selected.role] ?? 'rgba(255,255,255,0.05)', color: ROLE_COLOR[selected.role] ?? '#6B7280' }}>
+                {selected.full_name.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <p className="text-white font-semibold">{selected.full_name}</p>
+                <p className="text-gray-500 text-xs">{selected.email}</p>
+              </div>
+            </div>
+            <button onClick={() => setSelected(null)} className="text-gray-600 hover:text-white transition-colors">
+              <X size={16} />
             </button>
-          )
-        })}
-      </div>
+          </div>
 
-      {/* Individual: user search */}
-      {rewardType === 'individual' && (
-        <div className="rpg-card p-5 space-y-3">
-          <label className="block text-gray-400 text-xs uppercase tracking-wider">Rechercher un joueur</label>
-          <input
-            type="text"
-            value={userSearch}
-            onChange={e => handleUserSearch(e.target.value)}
-            placeholder="Email ou nom..."
-            className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#4D8BFF]/50"
-          />
-          {userResults.length > 0 && !selectedUser && (
-            <div className="space-y-1">
-              {userResults.map(u => (
-                <button key={u.id} onClick={() => { setSelectedUser(u); setUserSearch(u.email); setUserResults([]) }}
-                  className="w-full text-left px-3 py-2 rounded-lg text-sm transition-all hover:bg-white/5 flex items-center gap-3"
-                  style={{ border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium truncate">{u.full_name}</p>
-                    <p className="text-gray-500 text-xs truncate">{u.email}</p>
-                  </div>
-                  <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: '#4D8BFF15', color: '#4D8BFF' }}>{u.role}</span>
+          {/* Change role */}
+          <div>
+            <p className="text-gray-400 text-xs uppercase tracking-wider mb-2">Rôle</p>
+            <div className="flex gap-2">
+              {(['user', 'moderator', 'god'] as const).map(r => (
+                <button key={r} onClick={() => setNewRole(r)}
+                  className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all"
+                  style={newRole === r
+                    ? { background: ROLE_BG[r], color: ROLE_COLOR[r], border: `1px solid ${ROLE_COLOR[r]}40` }
+                    : { background: 'rgba(255,255,255,0.03)', color: '#6B7280', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  {r.toUpperCase()}
                 </button>
               ))}
             </div>
-          )}
-          {selectedUser && (
-            <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: 'rgba(77,139,255,0.08)', border: '1px solid rgba(77,139,255,0.25)' }}>
-              <div className="flex-1">
-                <p className="text-[#4D8BFF] font-semibold text-sm">{selectedUser.full_name}</p>
-                <p className="text-gray-400 text-xs">{selectedUser.email}</p>
+            {newRole !== selected.role && (
+              confirm === 'role' ? (
+                <div className="flex gap-2 mt-2">
+                  <button onClick={applyRole} disabled={saving}
+                    className="flex-1 py-2 rounded-lg text-xs font-semibold bg-[#D4A843]/15 text-[#D4A843] border border-[#D4A843]/30 disabled:opacity-50">
+                    {saving ? 'Enregistrement...' : '✓ Confirmer'}
+                  </button>
+                  <button onClick={() => setConfirm(null)} className="flex-1 py-2 rounded-lg text-xs text-gray-500 border border-white/[0.08]">
+                    Annuler
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setConfirm('role')}
+                  className="w-full mt-2 py-2 rounded-lg text-xs font-semibold"
+                  style={{ background: 'rgba(212,168,67,0.1)', color: '#D4A843', border: '1px solid rgba(212,168,67,0.2)' }}>
+                  Appliquer → {newRole}
+                </button>
+              )
+            )}
+          </div>
+
+          {/* Reward inline */}
+          <div>
+            <p className="text-gray-400 text-xs uppercase tracking-wider mb-3">Récompenser</p>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="text-gray-500 text-xs mb-1 flex items-center gap-1"><Activity size={10} /> XP</label>
+                <input type="number" min="0" max="100000" step="50" value={xp} onChange={e => setXp(Number(e.target.value))}
+                  className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#D4A843]/50" />
+                <div className="flex gap-1 mt-1.5 flex-wrap">
+                  {[100, 250, 500, 1000].map(v => (
+                    <button key={v} onClick={() => setXp(v)} type="button"
+                      className="px-2 py-0.5 rounded text-xs transition-all"
+                      style={xp === v
+                        ? { background: 'rgba(212,168,67,0.2)', color: '#D4A843', border: '1px solid rgba(212,168,67,0.4)' }
+                        : { background: 'rgba(255,255,255,0.04)', color: '#6B7280', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      {v}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <button onClick={() => { setSelectedUser(null); setUserSearch('') }} className="text-gray-500 hover:text-white transition-colors">
-                <X size={14} />
-              </button>
+              <div>
+                <label className="text-gray-500 text-xs mb-1 flex items-center gap-1"><Wallet size={10} /> Coins</label>
+                <input type="number" min="0" max="100000" step="50" value={coins} onChange={e => setCoins(Number(e.target.value))}
+                  className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#F59E0B]/50" />
+                <div className="flex gap-1 mt-1.5 flex-wrap">
+                  {[50, 100, 250, 500].map(v => (
+                    <button key={v} onClick={() => setCoins(v)} type="button"
+                      className="px-2 py-0.5 rounded text-xs transition-all"
+                      style={coins === v
+                        ? { background: 'rgba(245,158,11,0.2)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.4)' }
+                        : { background: 'rgba(255,255,255,0.04)', color: '#6B7280', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-          )}
+            <input type="text" maxLength={200} value={message} onChange={e => setMessage(e.target.value)}
+              placeholder="Message personnalisé (optionnel)"
+              className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-white/30 mb-3" />
+            <button onClick={sendIndividualReward} disabled={sending || (xp === 0 && coins === 0)}
+              className="w-full py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-40"
+              style={{ background: 'linear-gradient(135deg, #D4A843, #B8892A)', color: '#080A12' }}>
+              {sending ? 'Envoi...' : `🎁 Envoyer ${xp > 0 ? `+${xp} XP` : ''} ${coins > 0 ? `+${coins} coins` : ''}`}
+            </button>
+          </div>
+
+          {/* Reset character */}
+          <div>
+            <p className="text-gray-400 text-xs uppercase tracking-wider mb-2">Réinitialisation</p>
+            {confirm === 'reset' ? (
+              <div className="space-y-2">
+                <p className="text-xs text-red-400">⚠️ Supprime XP, coins, streak et succès. Irréversible.</p>
+                <div className="flex gap-2">
+                  <button onClick={resetChar} disabled={saving}
+                    className="flex-1 py-2 rounded-lg text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/25 disabled:opacity-50">
+                    {saving ? 'Réinitialisation...' : '🔄 Confirmer reset'}
+                  </button>
+                  <button onClick={() => setConfirm(null)} className="flex-1 py-2 rounded-lg text-xs text-gray-500 border border-white/[0.08]">
+                    Annuler
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setConfirm('reset')}
+                className="w-full py-2 rounded-lg text-xs font-semibold"
+                style={{ background: 'rgba(255,77,106,0.08)', color: '#FF4D6A', border: '1px solid rgba(255,77,106,0.2)' }}>
+                🔄 Réinitialiser le personnage
+              </button>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Branch: branch selector */}
-      {rewardType === 'branch' && (
-        <div className="rpg-card p-5">
-          <label className="block text-gray-400 text-xs uppercase tracking-wider mb-2">Branche cible</label>
+      {/* Global / Branch rewards */}
+      <div className="rpg-card p-5 space-y-4" style={{ border: '1px solid rgba(37,194,146,0.15)' }}>
+        <div className="flex items-center gap-2">
+          <Gift size={16} className="text-[#25C292]" />
+          <p className="text-white font-semibold text-sm">Récompenses globales</p>
+        </div>
+        <div className="flex gap-2">
+          {(['global', 'branch'] as const).map(t => (
+            <button key={t} onClick={() => setGlobalType(t)}
+              className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all"
+              style={globalType === t
+                ? { background: 'rgba(37,194,146,0.15)', color: '#25C292', border: '1px solid rgba(37,194,146,0.3)' }
+                : { background: 'rgba(255,255,255,0.03)', color: '#6B7280', border: '1px solid rgba(255,255,255,0.07)' }}>
+              {t === 'global' ? '🌍 Tous les joueurs' : '🏷️ Par branche'}
+            </button>
+          ))}
+        </div>
+        {globalType === 'branch' && (
           <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)}
             className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#D4A843]/50">
             <option value="">Sélectionner une branche...</option>
             {branches.map(b => <option key={b.id} value={b.id}>{b.icon} {b.name}</option>)}
           </select>
-        </div>
-      )}
-
-      {/* Rewards inputs */}
-      <div className="rpg-card p-5 space-y-4">
-        <p className="text-gray-400 text-xs uppercase tracking-wider">Montants</p>
-
-        <div className="grid grid-cols-2 gap-4">
-          {/* XP */}
+        )}
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="flex items-center gap-1.5 text-gray-400 text-xs uppercase tracking-wider mb-2">
-              <Activity size={12} /> XP
-            </label>
-            <input type="number" min="0" max="100000" step="50" value={xp} onChange={e => setXp(Number(e.target.value))}
-              className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#D4A843]/50" />
-            <div className="flex gap-1.5 mt-2 flex-wrap">
-              {[100, 250, 500, 1000].map(v => (
-                <button key={v} onClick={() => setXp(v)} type="button"
-                  className="px-2 py-0.5 rounded text-xs transition-all"
-                  style={xp === v
-                    ? { background: 'rgba(212,168,67,0.2)', color: '#D4A843', border: '1px solid rgba(212,168,67,0.4)' }
-                    : { background: 'rgba(255,255,255,0.04)', color: '#6B7280', border: '1px solid rgba(255,255,255,0.08)' }}>
-                  {v}
-                </button>
-              ))}
-            </div>
+            <label className="text-gray-500 text-xs mb-1 block">XP</label>
+            <input type="number" min="0" step="50" value={globalXp} onChange={e => setGlobalXp(Number(e.target.value))}
+              className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#D4A843]/50" />
           </div>
-
-          {/* Coins */}
           <div>
-            <label className="flex items-center gap-1.5 text-gray-400 text-xs uppercase tracking-wider mb-2">
-              <Wallet size={12} /> Coins
-            </label>
-            <input type="number" min="0" max="100000" step="50" value={coins} onChange={e => setCoins(Number(e.target.value))}
-              className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#F59E0B]/50" />
-            <div className="flex gap-1.5 mt-2 flex-wrap">
-              {[50, 100, 250, 500].map(v => (
-                <button key={v} onClick={() => setCoins(v)} type="button"
-                  className="px-2 py-0.5 rounded text-xs transition-all"
-                  style={coins === v
-                    ? { background: 'rgba(245,158,11,0.2)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.4)' }
-                    : { background: 'rgba(255,255,255,0.04)', color: '#6B7280', border: '1px solid rgba(255,255,255,0.08)' }}>
-                  {v}
-                </button>
-              ))}
-            </div>
+            <label className="text-gray-500 text-xs mb-1 block">Coins</label>
+            <input type="number" min="0" step="50" value={globalCoins} onChange={e => setGlobalCoins(Number(e.target.value))}
+              className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#F59E0B]/50" />
           </div>
         </div>
-
-        {/* Message */}
-        <div>
-          <label className="block text-gray-400 text-xs uppercase tracking-wider mb-2">Message personnalisé <span className="normal-case text-gray-600">(optionnel)</span></label>
-          <input type="text" maxLength={200} value={message} onChange={e => setMessage(e.target.value)}
-            placeholder="Message de notification envoyé aux joueurs..."
-            className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/30" />
-        </div>
+        <input type="text" maxLength={200} value={globalMsg} onChange={e => setGlobalMsg(e.target.value)}
+          placeholder="Message personnalisé (optionnel)"
+          className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-white/30" />
+        <button onClick={sendGlobalReward} disabled={sendingGlobal || (globalXp === 0 && globalCoins === 0)}
+          className="w-full py-2.5 rounded-xl font-cinzel font-bold text-xs tracking-widest uppercase transition-all disabled:opacity-40"
+          style={{ background: 'linear-gradient(135deg, #25C292, #1A9B73)', color: '#080A12' }}>
+          {sendingGlobal ? 'Envoi...' : '🎁 Envoyer'}
+        </button>
       </div>
-
-      {/* Preview */}
-      {(xp > 0 || coins > 0) && (
-        <div className="rpg-card p-4 flex items-center gap-3"
-          style={{ border: '1px solid rgba(37,194,146,0.2)', background: 'rgba(37,194,146,0.04)' }}>
-          <Gift size={16} className="text-[#25C292] flex-shrink-0" />
-          <div className="text-sm">
-            <span className="text-gray-400">Aperçu : </span>
-            {xp > 0 && <span className="text-[#D4A843] font-semibold">+{xp} XP </span>}
-            {coins > 0 && <span className="text-[#F59E0B] font-semibold">+{coins} coins </span>}
-            <span className="text-gray-500">→ {rewardType === 'individual' ? selectedUser?.full_name ?? '?' : rewardType === 'branch' ? (branches.find(b=>b.id===selectedBranch)?.name ?? 'branche') : 'tous les joueurs'}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Send button */}
-      <button onClick={handleSend} disabled={sending || (xp === 0 && coins === 0)}
-        className="w-full py-3.5 rounded-xl font-cinzel font-bold text-sm tracking-widest uppercase transition-all disabled:opacity-40"
-        style={{ background: 'linear-gradient(135deg, #D4A843, #B8892A)', color: '#080A12', boxShadow: sending ? 'none' : '0 0 20px rgba(212,168,67,0.3)' }}>
-        {sending ? 'Envoi en cours...' : '🎁 Envoyer les récompenses'}
-      </button>
     </div>
   )
 }

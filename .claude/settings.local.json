@@ -18,7 +18,25 @@
       "Bash(node -e \"const d = require\\(''./src/app/games''\\); console.log\\(d\\)\")",
       "Bash(ls src/app/invite/[token]/)",
       "mcp__claude_ai_Supabase__list_projects",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(\"e:/projets/amf-quest/src/app/leaderboard/layout.tsx\":*)",
+      "Bash(\"e:/projets/amf-quest/src/app/achievements/layout.tsx\":*)",
+      "Bash(\"e:/projets/amf-quest/src/app/modules/layout.tsx\":*)",
+      "Bash(\"e:/projets/amf-quest/src/app/god/layout.tsx\":*)",
+      "Bash(\"e:/projets/amf-quest/src/app/admin/layout.tsx\":*)",
+      "Bash(ls \"e:/projets/amf-quest/\"*.sql)",
+      "Bash(ls \"e:/projets/amf-quest/supabase\"*.sql)",
+      "Bash(find /e/projets/amf-quest -type f \\\\\\(-path */.git -prune -o -path */node_modules -prune -o -type f \\\\\\) -print)",
+      "Bash(grep -n \"SAFE_CLEANUP\\\\|__unused\\\\|TODO\\\\|FIXME\\\\|HACK\\\\|placeholder\\\\|stub\" e:/projets/amf-quest/src -r --include=*.ts --include=*.tsx -i)",
+      "Bash(mv public/file.svg public/globe.svg public/next.svg public/vercel.svg public/window.svg __SAFE_CLEANUP__/public/)",
+      "Bash(mv src/app/admin/settings/page.tsx __SAFE_CLEANUP__/admin-settings/app/admin/settings/page.tsx)",
+      "Bash(rmdir src/app/admin/settings)",
+      "Bash(python3 __replace_god.py)",
+      "Bash(rm __replace_god.py)",
+      "Bash(node \"e:/projets/amf-quest/__replace_god.py\")",
+      "Bash(node __replace_god.js)",
+      "Bash(rm __replace_god.js __replace_god.py)",
+      "Bash(echo \"exit: $?\")"
     ]
   }
 }

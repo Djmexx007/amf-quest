@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
+import { useUIStore } from '@/stores/uiStore'
 import type { UserRole } from '@/types'
 
 const ROLE_RANK: Record<UserRole, number> = {
@@ -17,6 +18,7 @@ interface Props {
 export default function AuthProvider({ children, requiredRole = 'user' }: Props) {
   const { user, isLoading } = useAuth()
   const router = useRouter()
+  const { setBgTheme, setEquippedTitle } = useUIStore()
 
   useEffect(() => {
     if (isLoading) return
@@ -28,6 +30,21 @@ export default function AuthProvider({ children, requiredRole = 'user' }: Props)
       router.push('/dashboard')
     }
   }, [user, isLoading, router, requiredRole])
+
+  // Load equipped cosmetics (theme + title) once user is known
+  useEffect(() => {
+    if (!user) return
+    fetch('/api/user/character')
+      .then(r => r.json())
+      .then((data: { equipped_items?: { item_type: string; effect: Record<string, unknown> }[] }) => {
+        const items = data.equipped_items ?? []
+        const cosmetic = items.find(i => i.item_type === 'cosmetic' && i.effect?.background)
+        setBgTheme(cosmetic ? String(cosmetic.effect.background) : null)
+        const titleItem = items.find(i => i.item_type === 'title' && i.effect?.title)
+        setEquippedTitle(titleItem ? String(titleItem.effect.title) : null)
+      })
+      .catch(() => {})
+  }, [user?.id])
 
   if (isLoading) {
     return (

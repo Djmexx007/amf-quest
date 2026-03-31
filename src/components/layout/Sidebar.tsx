@@ -8,7 +8,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
 import {
   LayoutDashboard, Swords, Trophy, BookOpen,
-  Users, BarChart3, Settings, Crown, ShieldCheck,
+  Users, BarChart3, Crown, ShieldCheck,
   ChevronDown, GitBranch, ArrowRightLeft, ShoppingBag, Medal,
 } from 'lucide-react'
 
@@ -35,7 +35,6 @@ const ADMIN_ITEMS: NavItem[] = [
   { href: '/admin/invites',         label: 'Invitations', icon: <Users size={18} />,       roles: ['moderator', 'god'] },
   { href: '/admin/users',           label: 'Utilisateurs',icon: <Users size={18} />,       roles: ['moderator', 'god'] },
   { href: '/admin/analytics',       label: 'Analytics',   icon: <BarChart3 size={18} />,   roles: ['moderator', 'god'] },
-  { href: '/admin/settings',        label: 'Paramètres',  icon: <Settings size={18} />,    roles: ['moderator', 'god'] },
   { href: '/god',                   label: 'GOD Panel',   icon: <Crown size={18} />,       roles: ['god'] },
 ]
 

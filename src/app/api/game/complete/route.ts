@@ -73,9 +73,12 @@ export async function POST(request: NextRequest) {
   for (const inv of equippedInventory ?? []) {
     const item = (inv.shop_items as unknown) as { item_type: string; effect: Record<string, unknown>; is_consumable: boolean }
     if (item.item_type !== 'boost') continue
-    if (item.effect.xp_multiplier) boostXPMult *= Number(item.effect.xp_multiplier)
-    if (item.effect.coins_multiplier) boostCoinsMult *= Number(item.effect.coins_multiplier)
-    if (item.is_consumable) consumedBoostIds.push(inv.id)
+    let applied = false
+    if (item.effect.xp_multiplier) { boostXPMult *= Number(item.effect.xp_multiplier); applied = true }
+    if (item.effect.coins_multiplier) { boostCoinsMult *= Number(item.effect.coins_multiplier); applied = true }
+    // Only consume boosts that were actually applied (multipliers). Non-multiplier boosts
+    // like dungeon_revive are consumed via /api/shop/consume-boost when triggered in-game.
+    if (item.is_consumable && applied) consumedBoostIds.push(inv.id)
   }
 
   const { xp: rawXP, breakdown } = calcXP(

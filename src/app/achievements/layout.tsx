@@ -2,12 +2,13 @@ import TopNav from '@/components/layout/TopNav'
 import Sidebar from '@/components/layout/Sidebar'
 import ToastContainer from '@/components/ui/Toast'
 import StarfieldBg from '@/components/layout/StarfieldBg'
+import BgWrapper from '@/components/layout/BgWrapper'
 import AuthProvider from '@/components/auth/AuthProvider'
 
 export default function AchievementsLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
-      <div className="min-h-screen flex flex-col bg-[#080A12]">
+      <BgWrapper>
         <StarfieldBg />
         <div className="relative z-10 flex flex-col h-screen">
           <TopNav />
@@ -17,7 +18,7 @@ export default function AchievementsLayout({ children }: { children: React.React
           </div>
         </div>
         <ToastContainer />
-      </div>
+      </BgWrapper>
     </AuthProvider>
   )
 }

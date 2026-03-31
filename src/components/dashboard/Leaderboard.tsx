@@ -1,17 +1,7 @@
 'use client'
 
-import type { Branch } from '@/types'
+import type { Branch, LeaderboardEntry } from '@/types'
 import { Crown } from 'lucide-react'
-
-interface LeaderboardEntry {
-  user_id: string
-  name: string
-  level: number
-  class_name: string
-  xp: number
-  streak_days: number
-  full_name: string
-}
 
 interface Props {
   entries: LeaderboardEntry[]

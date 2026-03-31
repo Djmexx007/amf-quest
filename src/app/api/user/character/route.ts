@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { verifyAccessToken } from '@/lib/auth'
+import { calcLevelFromXP, getCharacterClass } from '@/lib/xp-calculator'
 
 export async function GET(request: NextRequest) {
   const accessToken = request.cookies.get('amf_access')?.value
@@ -20,6 +21,19 @@ export async function GET(request: NextRequest) {
 
   if (error || !character) {
     return NextResponse.json({ error: 'Personnage introuvable.' }, { status: 404 })
+  }
+
+  // Auto-correct level if out of sync with total XP (e.g. after god XP gifts)
+  const { level: correctLevel, xpToNext: correctXpToNext } = calcLevelFromXP(character.xp)
+  if (correctLevel !== character.level || correctXpToNext !== character.xp_to_next_level) {
+    const correctClass = getCharacterClass(correctLevel)
+    await supabaseAdmin
+      .from('characters')
+      .update({ level: correctLevel, xp_to_next_level: correctXpToNext, class_name: correctClass })
+      .eq('id', character.id)
+    character.level = correctLevel
+    character.xp_to_next_level = correctXpToNext
+    character.class_name = correctClass
   }
 
   const { data: branch } = await supabaseAdmin

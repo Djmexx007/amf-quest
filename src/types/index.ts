@@ -119,6 +119,8 @@ export interface Character {
   total_games_played: number
   total_questions_answered: number
   total_correct_answers: number
+  login_streak: number
+  last_daily_reward_date: string | null
   avatar_config: Record<string, unknown>
   created_at: string
   updated_at: string
@@ -364,14 +366,14 @@ export interface GameResult {
 }
 
 export interface LeaderboardEntry {
-  rank: number
   user_id: string
   full_name: string
-  character_name: string
+  name: string
   level: number
-  class_name: CharacterClass
+  class_name: string
   xp: number
   streak_days: number
+  equipped_title: string | null
 }
 
 // -------------------------------------------------------

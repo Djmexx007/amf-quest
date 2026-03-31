@@ -29,17 +29,38 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Personnage introuvable. Réessaie dans quelques secondes.' }, { status: 404 })
   }
 
-  // Fetch user names separately for leaderboard (avoid unreliable join syntax)
+  // Fetch user names + equipped titles for leaderboard
   const leaderboardChars = leaderboardCharsRes.data ?? []
   const userIds = leaderboardChars.map(c => c.user_id)
-  const { data: leaderboardUsers } = userIds.length > 0
-    ? await supabaseAdmin.from('users').select('id, full_name').in('id', userIds)
-    : { data: [] }
 
-  const leaderboard = leaderboardChars.map(c => ({
-    ...c,
-    full_name: leaderboardUsers?.find(u => u.id === c.user_id)?.full_name ?? 'Joueur',
-  }))
+  const [{ data: leaderboardUsers }, { data: leaderboardTitles }] = await Promise.all([
+    userIds.length > 0
+      ? supabaseAdmin.from('users').select('id, full_name').in('id', userIds)
+      : Promise.resolve({ data: [] }),
+    userIds.length > 0
+      ? supabaseAdmin
+          .from('user_inventory')
+          .select('user_id, shop_items!inner(item_type, effect)')
+          .in('user_id', userIds)
+          .eq('branch_id', branchId)
+          .eq('is_equipped', true)
+      : Promise.resolve({ data: [] }),
+  ])
+
+  const leaderboard = leaderboardChars.map(c => {
+    const titleInv = (leaderboardTitles ?? []).find(
+      t => t.user_id === c.user_id &&
+        (t.shop_items as unknown as { item_type: string; effect: Record<string, unknown> }).item_type === 'title'
+    )
+    const titleEffect = titleInv
+      ? (titleInv.shop_items as unknown as { item_type: string; effect: Record<string, unknown> }).effect
+      : null
+    return {
+      ...c,
+      full_name: leaderboardUsers?.find(u => u.id === c.user_id)?.full_name ?? 'Joueur',
+      equipped_title: titleEffect?.title ? String(titleEffect.title) : null,
+    }
+  })
 
   return NextResponse.json({
     character: characterRes.data,

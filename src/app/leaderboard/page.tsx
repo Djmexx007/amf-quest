@@ -3,16 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { Trophy, Flame, Sword } from 'lucide-react'
-
-interface LeaderboardEntry {
-  user_id: string
-  full_name: string
-  name: string
-  level: number
-  class_name: string
-  xp: number
-  streak_days: number
-}
+import { getLeague } from '@/lib/leagues'
+import type { LeaderboardEntry } from '@/types'
 
 const CLASS_ICONS: Record<string, string> = {
   Recrue: '🗡️',
@@ -100,18 +92,35 @@ export default function LeaderboardPage() {
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-white font-semibold text-sm truncate">{entry.full_name}</p>
+                    {entry.equipped_title && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold flex-shrink-0"
+                        style={{ background: 'rgba(212,168,67,0.12)', color: '#D4A843', border: '1px solid rgba(212,168,67,0.25)' }}>
+                        {entry.equipped_title}
+                      </span>
+                    )}
                     {isCurrentUser && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded"
+                      <span className="text-[10px] px-1.5 py-0.5 rounded flex-shrink-0"
                         style={{ background: 'rgba(212,168,67,0.15)', color: '#D4A843' }}>
                         Toi
                       </span>
                     )}
                   </div>
-                  <p className="text-gray-500 text-xs">
-                    {CLASS_ICONS[entry.class_name] ?? '⚔️'} {entry.class_name} • {entry.name}
-                  </p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-gray-500 text-xs">
+                      {CLASS_ICONS[entry.class_name] ?? '⚔️'} {entry.class_name} • {entry.name}
+                    </p>
+                    {(() => {
+                      const league = getLeague(entry.xp)
+                      return (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold flex-shrink-0"
+                          style={{ background: `${league.color}12`, color: league.color, border: `1px solid ${league.color}25` }}>
+                          {league.icon} {league.name}
+                        </span>
+                      )
+                    })()}
+                  </div>
                 </div>
 
                 {/* Stats */}

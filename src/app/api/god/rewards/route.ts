@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { verifyAccessToken } from '@/lib/auth'
 import { checkRateLimit, rateLimitKey, RATE_LIMITS, tooManyRequests } from '@/lib/rate-limit'
+import { calcLevelFromXP, getCharacterClass } from '@/lib/xp-calculator'
 
 function requireGod(request: NextRequest) {
   const token = request.cookies.get('amf_access')?.value
@@ -76,9 +77,12 @@ export async function POST(request: NextRequest) {
       const { data: chars } = await q
 
       for (const char of chars ?? []) {
+        const newXP = char.xp + xp
+        const { level: newLevel, xpToNext } = calcLevelFromXP(newXP)
+        const newClass = getCharacterClass(newLevel)
         await supabaseAdmin
           .from('characters')
-          .update({ xp: char.xp + xp, coins: char.coins + coins })
+          .update({ xp: newXP, coins: char.coins + coins, level: newLevel, xp_to_next_level: xpToNext, class_name: newClass })
           .eq('id', char.id)
         affected++
       }
@@ -165,16 +169,16 @@ export async function POST(request: NextRequest) {
       const { data: chars } = await q
 
       // Batch update in chunks of 100
-      const updates = (chars ?? []).map(c => ({
-        id: c.id,
-        xp: c.xp + xp,
-        coins: c.coins + coins,
-      }))
+      const updates = (chars ?? []).map(c => {
+        const newXP = c.xp + xp
+        const { level: newLevel, xpToNext } = calcLevelFromXP(newXP)
+        return { id: c.id, xp: newXP, coins: c.coins + coins, level: newLevel, xp_to_next_level: xpToNext, class_name: getCharacterClass(newLevel) }
+      })
 
       for (let i = 0; i < updates.length; i += 100) {
         const chunk = updates.slice(i, i + 100)
         await Promise.all(chunk.map(u =>
-          supabaseAdmin.from('characters').update({ xp: u.xp, coins: u.coins }).eq('id', u.id)
+          supabaseAdmin.from('characters').update({ xp: u.xp, coins: u.coins, level: u.level, xp_to_next_level: u.xp_to_next_level, class_name: u.class_name }).eq('id', u.id)
         ))
         affected += chunk.length
       }

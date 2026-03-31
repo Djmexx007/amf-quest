@@ -191,9 +191,9 @@ export default function TopNav() {
                     </Badge>
                   </div>
                 </div>
-                <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
+                <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
                   style={{ background: `${roleColor}20`, border: `2px solid ${roleColor}50`, color: roleColor }}>
-                  {user.full_name.charAt(0).toUpperCase()}
+                  <span className="text-sm font-bold">{user.full_name.charAt(0).toUpperCase()}</span>
                 </div>
               </button>
 
