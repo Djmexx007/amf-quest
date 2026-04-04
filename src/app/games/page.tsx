@@ -60,7 +60,7 @@ const GAMES = [
     difficultyColor: '#FF4D6A',
   },
   {
-    title: 'Trivia Crack',
+    title: 'Arène du Savoir',
     description: 'Roue tournante avec 6 catégories et couronnes à collectionner.',
     icon: '🎯',
     href: '/games/trivia-crack',
@@ -84,13 +84,13 @@ export default function GamesPage() {
   const { user } = useAuth()
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="page-container">
       <div className="mb-8">
         <h1 className="font-cinzel text-3xl font-bold text-white mb-2">Mini-jeux</h1>
         <p className="text-gray-400">Choisis ton combat et gagne de l'XP pour monter en niveau.</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 lg:gap-5 xl:gap-6">
         {GAMES.map((game) => (
           <Link
             key={game.href}

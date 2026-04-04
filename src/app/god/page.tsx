@@ -50,7 +50,7 @@ export default function GodPage() {
   const [tab, setTab] = useState<Tab>('overview')
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="page-container space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Crown size={24} className="text-[#D4A843]" />

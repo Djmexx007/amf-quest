@@ -56,6 +56,32 @@ body {
   box-shadow: 0 0 20px rgba(212,168,67,0.1);
 }
 
+/* ── Large screen enhancements ──────────────────────────────── */
+@media (min-width: 1536px) {
+  .rpg-card {
+    border-radius: 14px;
+  }
+}
+
+/* ── Ultra-wide (2K+) ────────────────────────────────────────── */
+@media (min-width: 2000px) {
+  html { font-size: 17px; }
+}
+
+/* ── Page container utility ──────────────────────────────────── */
+.page-container {
+  width: 100%;
+  max-width: 1700px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 1.5rem 1rem;
+}
+@media (min-width: 640px)  { .page-container { padding-left: 1.5rem;  padding-right: 1.5rem; } }
+@media (min-width: 1024px) { .page-container { padding-left: 2rem;    padding-right: 2rem; } }
+@media (min-width: 1280px) { .page-container { padding-left: 2.5rem;  padding-right: 2.5rem; } }
+@media (min-width: 1536px) { .page-container { padding-left: 3.5rem;  padding-right: 3.5rem; } }
+@media (min-width: 1920px) { .page-container { padding-left: 5rem;    padding-right: 5rem; } }
+
 /* Animations */
 @keyframes shimmer {
   0% { transform: translateX(-100%); }

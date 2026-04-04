@@ -80,14 +80,14 @@ export default function DashboardPage() {
   const branchColor = data.branch.color
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="page-container space-y-6">
       <WelcomeBanner
         fullName={user?.full_name ?? ''}
         branch={data.branch}
         streak={data.character.streak_days}
       />
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 xl:gap-8">
         {/* Left: progression + play */}
         <div className="xl:col-span-2 space-y-6">
           <CharacterPanel character={data.character} branch={data.branch} />

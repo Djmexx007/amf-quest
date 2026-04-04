@@ -31,6 +31,10 @@ export type GameType =
 
 export type ItemType = 'avatar' | 'title' | 'boost' | 'cosmetic'
 
+export type QuestionType = 'mcq' | 'scenario' | 'sorting' | 'memory_pair' | 'regulation'
+
+export type QuestionStatus = 'pending' | 'approved' | 'rejected'
+
 export type ItemRarity = 'common' | 'rare' | 'epic' | 'legendary'
 
 export type NotificationType = 'info' | 'warning' | 'success' | 'admin'
@@ -139,6 +143,17 @@ export interface Module {
   created_at: string
 }
 
+export interface QuestionCategory {
+  id: string
+  game_type: GameType
+  name: string
+  icon: string | null
+  color: string | null
+  is_active: boolean
+  order_index: number
+  created_at: string
+}
+
 export interface Question {
   id: string
   module_id: string
@@ -148,6 +163,11 @@ export interface Question {
   icon: string
   difficulty: 1 | 2 | 3
   game_types: GameType[]
+  question_type: QuestionType
+  status: QuestionStatus
+  category_id: string | null
+  approved_by: string | null
+  approved_at: string | null
   explanation: string
   tip: string | null
   tags: string[] | null
@@ -162,6 +182,8 @@ export interface Answer {
   answer_text: string
   is_correct: boolean
   order_index: number
+  /** Sorting: { correct_position: number } | Memory: { pair_id: string; side: 'term' | 'definition' } */
+  answer_metadata: Record<string, unknown> | null
 }
 
 export interface QuestionWithAnswers extends Question {

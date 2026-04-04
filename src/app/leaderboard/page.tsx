@@ -44,7 +44,7 @@ export default function LeaderboardPage() {
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="page-container max-w-4xl">
       <div className="flex items-center gap-3 mb-8">
         <Trophy size={28} className="text-[#D4A843]" />
         <div>

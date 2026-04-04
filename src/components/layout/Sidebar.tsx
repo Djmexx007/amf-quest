@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/authStore'
 import {
   LayoutDashboard, Swords, Trophy, BookOpen,
   Users, BarChart3, Crown, ShieldCheck,
-  ChevronDown, GitBranch, ArrowRightLeft, ShoppingBag, Medal,
+  ChevronDown, GitBranch, ArrowRightLeft, ShoppingBag, Medal, Tag,
 } from 'lucide-react'
 
 interface NavItem {
@@ -35,6 +35,7 @@ const ADMIN_ITEMS: NavItem[] = [
   { href: '/admin/invites',         label: 'Invitations', icon: <Users size={18} />,       roles: ['moderator', 'god'] },
   { href: '/admin/users',           label: 'Utilisateurs',icon: <Users size={18} />,       roles: ['moderator', 'god'] },
   { href: '/admin/analytics',       label: 'Analytics',   icon: <BarChart3 size={18} />,   roles: ['moderator', 'god'] },
+  { href: '/admin/categories',      label: 'Catégories',  icon: <Tag size={18} />,         roles: ['god'] },
   { href: '/god',                   label: 'GOD Panel',   icon: <Crown size={18} />,       roles: ['god'] },
 ]
 

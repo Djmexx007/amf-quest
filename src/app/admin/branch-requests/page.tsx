@@ -56,7 +56,7 @@ export default function BranchRequestsPage() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="page-container">
       <div className="flex items-center gap-3 mb-6">
         <GitBranch size={22} className="text-[#D4A843]" />
         <div>

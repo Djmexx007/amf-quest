@@ -22,7 +22,7 @@ interface Invite {
 interface Stats { total: number; pending: number; accepted: number; expired: number }
 
 const ROLE_COLOR: Record<string, string> = {
-  user: '#4D8BFF', moderator: '#F59E0B', admin: '#FF4D6A', god: '#D4A843',
+  user: '#4D8BFF', moderator: '#F59E0B', god: '#D4A843',
 }
 const STATUS_CONFIG: Record<string, { color: string; icon: React.ReactNode; label: string }> = {
   pending:   { color: '#F59E0B', icon: <Clock size={12} />,        label: 'En attente' },
@@ -81,7 +81,7 @@ export default function InvitesPage() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="page-container">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -320,8 +320,8 @@ function CreateInviteModal({ isGod, onClose, onCreated, showToast }: {
                   <select value={role} onChange={e => setRole(e.target.value)}
                     className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none">
                     <option value="user">Utilisateur</option>
-                    <option value="moderator">Modérateur</option>
-                    {isGod && <option value="admin">Admin</option>}
+                    {isGod && <option value="moderator">Modérateur</option>}
+                    {isGod && <option value="god">God</option>}
                   </select>
                 </div>
                 <div>

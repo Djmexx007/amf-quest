@@ -39,7 +39,17 @@
       "Bash(echo \"exit: $?\")",
       "Bash(grep -r \"end-game\\\\|endgame\\\\|end_game\\\\|finish\\\\|submit.*score\\\\|save.*result\" e:/projets/amf-quest/src/app/api --include=*.ts -l)",
       "Bash(find e:/projets/amf-quest/src/app/api/admin -name *.ts -o -name *.js)",
-      "mcp__claude_ai_Supabase__list_tables"
+      "mcp__claude_ai_Supabase__list_tables",
+      "Bash(git push:*)",
+      "Bash(xargs grep:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(find /e/projets/amf-quest -name *.sql -o -name schema*)",
+      "Bash(ls /e/projets/amf-quest/supabase*)",
+      "Bash(ls /e/projets/amf-quest/migrations*)",
+      "Bash(npx supabase:*)",
+      "Bash(node scripts/migrate.mjs)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx|js|jsx\\)$\")"
     ]
   }
 }

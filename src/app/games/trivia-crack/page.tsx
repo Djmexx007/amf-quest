@@ -105,13 +105,13 @@ export default function TriviaCrackPage() {
   const sliceAngle = 60
 
   return (
-    <GameShell title="Trivia Crack" icon="🎯" branchColor={branchColor}>
+    <GameShell title="Arène du Savoir" icon="🏟️" branchColor={branchColor}>
       {phase === 'wheel' && (
-        <div className="max-w-lg mx-auto text-center animate-fade-in">
-          <div className="flex justify-center gap-2 mb-6">
+        <div className="max-w-lg xl:max-w-2xl mx-auto text-center animate-fade-in">
+          <div className="flex justify-center gap-2 sm:gap-3 mb-6">
             {CATEGORIES.map(cat => (
               <div key={cat.key} className="text-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm transition-all ${mastered.has(cat.key) ? 'ring-2' : 'opacity-30'}`}
+                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-sm sm:text-base transition-all ${mastered.has(cat.key) ? 'ring-2' : 'opacity-30'}`}
                   style={{ background: `${cat.color}20`, borderColor: cat.color, outline: mastered.has(cat.key) ? `2px solid ${cat.color}` : 'none' }}>
                   {cat.icon}
                 </div>
@@ -120,8 +120,8 @@ export default function TriviaCrackPage() {
           </div>
 
           {/* Wheel */}
-          <div className="relative inline-block mb-6">
-            <svg width={wheelSize} height={wheelSize} viewBox={`0 0 ${wheelSize} ${wheelSize}`}
+          <div className="relative w-56 sm:w-64 lg:w-72 xl:w-80 2xl:w-96 mx-auto mb-6">
+            <svg width="100%" height="100%" viewBox={`0 0 ${wheelSize} ${wheelSize}`}
               style={{ transition: spinning ? 'transform 2s cubic-bezier(0.17,0.67,0.12,0.99)' : 'none', transform: `rotate(${rotation}deg)`, transformOrigin: 'center' }}>
               {CATEGORIES.map((cat, i) => {
                 const startAngle = (i * sliceAngle - 90) * (Math.PI / 180)
@@ -206,7 +206,7 @@ export default function TriviaCrackPage() {
           bonusBreakdown={result.breakdown} rankUpReward={result.rankUp}
           branchColor={branchColor}
           onReplay={() => { setPhase('wheel'); setCorrect(0); setTotal(0); setScore(0); setMastered(new Set()) }}
-          gameLabel="Trivia Crack" />
+          gameLabel="Arène du Savoir" />
       )}
       <AchievementUnlockToast achievements={unlockedAchievements} onDone={() => setUnlockedAchievements([])} />
     </GameShell>

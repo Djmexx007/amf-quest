@@ -143,17 +143,18 @@ export default function MemoryPage() {
             <span>Tentatives: <strong className="text-white">{attempts}</strong></span>
             <span>Temps: <strong style={{ color: branchColor }}>{Math.floor(timer/60)}:{String(timer%60).padStart(2,'0')}</strong></span>
           </div>
-          <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+          <div className="grid gap-2 sm:gap-3" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
             {cards.map(card => (
               <button key={card.id} onClick={() => handleCardClick(card.id)}
-                className="aspect-square rounded-lg text-xs font-medium transition-all duration-300 p-2 flex items-center justify-center text-center leading-tight"
+                className="rounded-xl font-medium transition-all duration-300 p-2 sm:p-3 flex items-center justify-center text-center leading-snug"
                 style={{
+                  minHeight: cols === 4 ? '7rem' : '6rem',
                   background: card.matched ? `${branchColor}20` : card.flipped ? '#161D35' : '#111628',
                   border: `1px solid ${card.matched ? `${branchColor}50` : card.flipped ? `${branchColor}30` : 'rgba(255,255,255,0.06)'}`,
                   color: card.matched ? branchColor : card.flipped ? '#fff' : 'transparent',
                   transform: card.flipped || card.matched ? 'rotateY(0deg)' : 'rotateY(180deg)',
                   cursor: card.matched ? 'default' : 'pointer',
-                  fontSize: card.content.length > 40 ? '9px' : card.content.length > 20 ? '10px' : '12px',
+                  fontSize: card.content.length > 60 ? '12px' : card.content.length > 30 ? '13px' : '14px',
                 }}>
                 {(card.flipped || card.matched) ? card.content : ''}
               </button>

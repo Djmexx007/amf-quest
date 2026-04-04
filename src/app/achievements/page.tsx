@@ -58,7 +58,7 @@ export default function AchievementsPage() {
   const pct = stats ? Math.round((stats.unlocked / stats.total) * 100) : 0
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="page-container">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <Trophy size={28} className="text-[#D4A843]" />
