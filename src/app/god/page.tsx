@@ -1114,6 +1114,23 @@ function ToolsTab({ addToast }: { addToast: AddToast }) {
         )}
       </div>
 
+      {/* Blackjack — table secrète */}
+      <div className="rpg-card p-4 flex items-center justify-between"
+        style={{ borderColor: 'rgba(212,168,67,0.2)', background: 'rgba(212,168,67,0.03)' }}>
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg text-xl leading-none" style={{ background: 'rgba(212,168,67,0.1)' }}>🃏</div>
+          <div>
+            <p className="text-white font-semibold text-sm">Blackjack</p>
+            <p className="text-gray-500 text-xs">Table secrète — coins du jeu uniquement</p>
+          </div>
+        </div>
+        <a href="/god/blackjack"
+          className="px-4 py-2 rounded-lg text-sm font-semibold transition-all"
+          style={{ background: 'rgba(212,168,67,0.15)', color: '#D4A843', border: '1px solid rgba(212,168,67,0.3)' }}>
+          Jouer
+        </a>
+      </div>
+
       {/* Confirm dialog */}
       {confirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => !running && setConfirm(null)}>
