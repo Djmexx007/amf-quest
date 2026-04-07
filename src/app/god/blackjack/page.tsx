@@ -234,7 +234,7 @@ export default function BlackjackPage() {
       let d = [...curDeck]
       while (handTotal(revealed) < 17) {
         await sleep(900)
-        const card = d.pop()!
+        const card = { ...d.pop()!, hidden: false as const }
         revealed = [...revealed, card]
         setDealerHand([...revealed])
       }
