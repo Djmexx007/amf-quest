@@ -35,9 +35,9 @@ export default function AuthProvider({ children, requiredRole = 'user' }: Props)
     }
   }, [user, isLoading, router, requiredRole])
 
-  // Load equipped cosmetics (theme + title) once user is known
+  // Load equipped cosmetics (theme + title) once user has a branch
   useEffect(() => {
-    if (!user) return
+    if (!user?.selected_branch_id) return
     fetch('/api/user/character')
       .then(r => r.json())
       .then((data: { equipped_items?: { item_type: string; effect: Record<string, unknown> }[] }) => {
@@ -48,7 +48,7 @@ export default function AuthProvider({ children, requiredRole = 'user' }: Props)
         setEquippedTitle(titleItem ? String(titleItem.effect.title) : null)
       })
       .catch(() => {})
-  }, [user?.id])
+  }, [user?.id, user?.selected_branch_id])
 
   if (isLoading) {
     return (

@@ -33,7 +33,7 @@ interface BulkUser {
   id: string; email: string; full_name: string; role: string; status: string
 }
 
-type Tab = 'overview' | 'branches' | 'logs' | 'tools' | 'config' | 'questions' | 'users' | 'bugs'
+type Tab = 'overview' | 'branches' | 'logs' | 'tools' | 'config' | 'questions' | 'users' | 'bugs' | 'shop'
 
 // ── Helpers ───────────────────────────────────────────────────
 const STATUS_COLOR: Record<string, string> = {
@@ -65,6 +65,7 @@ export default function GodPage() {
         {([
           { key: 'overview',   label: 'Vue d\'ensemble', icon: <Activity size={14} /> },
           { key: 'branches',   label: 'Branches',        icon: <GitBranch size={14} /> },
+          { key: 'shop',       label: 'Boutique',        icon: <Gift size={14} /> },
           { key: 'config',     label: 'Config jeux',     icon: <Wrench size={14} /> },
           { key: 'questions',  label: 'Questions',       icon: <ScrollText size={14} /> },
           { key: 'logs',       label: 'Logs',            icon: <ScrollText size={14} /> },
@@ -88,6 +89,7 @@ export default function GodPage() {
       {tab === 'users'     && <UsersHubTab addToast={addToast} />}
       {tab === 'overview'  && <OverviewTab addToast={addToast} />}
       {tab === 'branches'  && <BranchesTab addToast={addToast} />}
+      {tab === 'shop'      && <ShopManagementTab addToast={addToast} />}
       {tab === 'config'    && <GameConfigTab addToast={addToast} />}
       {tab === 'questions' && <QuestionsApprovalTab addToast={addToast} />}
       {tab === 'logs'      && <LogsTab />}
@@ -1672,6 +1674,349 @@ function BugReportsTab({ addToast }: { addToast: AddToast }) {
             style={{ border: '1px solid rgba(255,255,255,0.07)' }}>
             <ChevronRight size={14} />
           </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Tab: Shop Management ──────────────────────────────────────
+interface ShopItemAdmin {
+  id: string
+  name: string
+  icon: string
+  item_type: string
+  rarity: string
+  cost_coins: number
+  effect: Record<string, unknown>
+  is_active: boolean
+  is_consumable: boolean
+}
+
+interface InventoryEntry {
+  id: string
+  item_id: string
+  branch_id: string
+  is_equipped: boolean
+  created_at: string
+  shop_items: { name: string; icon: string; item_type: string; rarity: string; effect: Record<string, unknown>; is_consumable: boolean } | null
+}
+
+const RARITY_COLOR: Record<string, string> = {
+  common: '#9CA3AF', rare: '#4D8BFF', epic: '#A78BFA', legendary: '#D4A843',
+}
+
+function ShopManagementTab({ addToast }: { addToast: AddToast }) {
+  const [view, setView] = useState<'items' | 'inventory'>('items')
+  const [items, setItems] = useState<ShopItemAdmin[]>([])
+  const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [rarityFilter, setRarityFilter] = useState('all')
+  const [loading, setLoading] = useState(true)
+  const [editingPrice, setEditingPrice] = useState<string | null>(null)
+  const [newPrice, setNewPrice] = useState('')
+  const [giveTarget, setGiveTarget] = useState<ShopItemAdmin | null>(null)
+  const [giveUserId, setGiveUserId] = useState('')
+  const [giving, setGiving] = useState(false)
+  const [invUserId, setInvUserId] = useState('')
+  const [inventory, setInventory] = useState<InventoryEntry[]>([])
+  const [invLoading, setInvLoading] = useState(false)
+  const [users, setUsers] = useState<BulkUser[]>([])
+
+  const loadItems = useCallback(async () => {
+    setLoading(true)
+    const res = await fetch('/api/god/shop-items')
+    const data = await res.json()
+    setItems(data.items ?? [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    loadItems()
+    fetch('/api/god/users').then(r => r.json()).then(d => setUsers(d.users ?? []))
+  }, [loadItems])
+
+  const filtered = items.filter(item => {
+    const isChest = !!(item.effect as Record<string, unknown>)?.mystery_box
+    const matchType =
+      typeFilter === 'all' ? true :
+      typeFilter === 'coffre' ? isChest :
+      typeFilter === 'boost' ? !isChest && item.item_type === 'boost' :
+      item.item_type === typeFilter
+    const matchRarity = rarityFilter === 'all' || item.rarity === rarityFilter
+    const matchSearch = !search || item.name.toLowerCase().includes(search.toLowerCase())
+    return matchType && matchRarity && matchSearch
+  })
+
+  async function toggleActive(item: ShopItemAdmin) {
+    await fetch('/api/god/shop-items', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id: item.id, is_active: !item.is_active }),
+    })
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, is_active: !i.is_active } : i))
+    addToast({ type: 'success', title: `Item ${!item.is_active ? 'activé' : 'désactivé'}` })
+  }
+
+  async function savePrice(item: ShopItemAdmin) {
+    const price = parseInt(newPrice)
+    if (isNaN(price) || price < 0) return
+    await fetch('/api/god/shop-items', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id: item.id, cost_coins: price }),
+    })
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, cost_coins: price } : i))
+    setEditingPrice(null)
+    addToast({ type: 'success', title: 'Prix mis à jour' })
+  }
+
+  async function giveItem() {
+    if (!giveTarget || !giveUserId) return
+    setGiving(true)
+    const res = await fetch('/api/god/rewards', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'individual', user_id: giveUserId, item_id: giveTarget.id }),
+    })
+    const data = await res.json()
+    setGiving(false)
+    if (res.ok) {
+      addToast({ type: 'success', title: `"${giveTarget.name}" donné !` })
+      setGiveTarget(null)
+      setGiveUserId('')
+    } else {
+      addToast({ type: 'error', title: data.error ?? 'Erreur' })
+    }
+  }
+
+  async function loadInventory() {
+    if (!invUserId) return
+    setInvLoading(true)
+    const res = await fetch(`/api/god/inventory?user_id=${invUserId}`)
+    const data = await res.json()
+    setInventory(data.inventory ?? [])
+    setInvLoading(false)
+  }
+
+  async function removeFromInventory(invId: string) {
+    await fetch('/api/god/inventory', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inventory_id: invId }),
+    })
+    setInventory(prev => prev.filter(i => i.id !== invId))
+    addToast({ type: 'success', title: 'Item retiré' })
+  }
+
+  const isChestOnly = (item: ShopItemAdmin) => !!(item.effect as Record<string, unknown>)?.chest_only
+
+  return (
+    <div className="space-y-5">
+      {/* Sub-nav */}
+      <div className="flex gap-2">
+        {(['items', 'inventory'] as const).map(v => (
+          <button key={v} onClick={() => setView(v)}
+            className="px-4 py-2 rounded-lg text-sm font-semibold transition-all"
+            style={{
+              background: view === v ? 'rgba(212,168,67,0.15)' : 'rgba(255,255,255,0.03)',
+              border: `1px solid ${view === v ? '#D4A843' : 'rgba(255,255,255,0.08)'}`,
+              color: view === v ? '#D4A843' : '#6B7280',
+            }}>
+            {v === 'items' ? '🛒 Items' : '🎒 Inventaires'}
+          </button>
+        ))}
+      </div>
+
+      {/* ── ITEMS VIEW ── */}
+      {view === 'items' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Rechercher un item..."
+              className="flex-1 min-w-48 bg-[#080A12] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#D4A843]/50" />
+            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+              className="bg-[#080A12] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#D4A843]/50">
+              <option value="all">Tous types</option>
+              <option value="boost">Boosts</option>
+              <option value="coffre">Coffres</option>
+              <option value="title">Titres</option>
+              <option value="cosmetic">Cosmétiques</option>
+              <option value="sound">Sons</option>
+            </select>
+            <select value={rarityFilter} onChange={e => setRarityFilter(e.target.value)}
+              className="bg-[#080A12] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#D4A843]/50">
+              <option value="all">Toutes raretés</option>
+              <option value="common">Commun</option>
+              <option value="rare">Rare</option>
+              <option value="epic">Épique</option>
+              <option value="legendary">Légendaire</option>
+            </select>
+          </div>
+
+          <p className="text-gray-500 text-xs">{filtered.length} item{filtered.length > 1 ? 's' : ''}</p>
+
+          {loading ? (
+            <div className="text-center py-10 text-gray-500">Chargement...</div>
+          ) : (
+            <div className="space-y-2">
+              {filtered.map(item => {
+                const rc = RARITY_COLOR[item.rarity] ?? '#9CA3AF'
+                const isEditing = editingPrice === item.id
+                return (
+                  <div key={item.id} className="flex items-center gap-3 p-3 rounded-xl"
+                    style={{ background: '#0D1221', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <span className="text-2xl flex-shrink-0">{item.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-white text-sm font-semibold truncate">{item.name}</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded font-semibold"
+                          style={{ background: `${rc}20`, color: rc, border: `1px solid ${rc}30` }}>
+                          {item.rarity}
+                        </span>
+                        <span className="text-xs text-gray-600">{item.item_type}</span>
+                        {isChestOnly(item) && (
+                          <span className="text-xs px-1.5 py-0.5 rounded font-semibold bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                            🗝️ Exclusif
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      {isEditing ? (
+                        <div className="flex items-center gap-1">
+                          <input type="number" value={newPrice} onChange={e => setNewPrice(e.target.value)}
+                            className="w-20 bg-[#080A12] border border-[#D4A843]/50 rounded px-2 py-1 text-white text-xs focus:outline-none"
+                            onKeyDown={e => e.key === 'Enter' && savePrice(item)} autoFocus />
+                          <button onClick={() => savePrice(item)}
+                            className="text-xs px-2 py-1 rounded text-[#25C292] border border-[#25C292]/30 bg-[#25C292]/10">✓</button>
+                          <button onClick={() => setEditingPrice(null)}
+                            className="text-xs px-2 py-1 rounded text-gray-500 border border-white/10">✕</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => { setEditingPrice(item.id); setNewPrice(String(item.cost_coins)) }}
+                          className="text-xs text-[#D4A843] font-semibold hover:opacity-80 transition-opacity">
+                          {isChestOnly(item) ? 'exclusif' : `${item.cost_coins} 🪙`}
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button onClick={() => toggleActive(item)}
+                        className="p-1.5 rounded-lg transition-all"
+                        style={{
+                          background: item.is_active ? 'rgba(37,194,146,0.15)' : 'rgba(255,77,106,0.1)',
+                          border: `1px solid ${item.is_active ? 'rgba(37,194,146,0.3)' : 'rgba(255,77,106,0.3)'}`,
+                          color: item.is_active ? '#25C292' : '#FF4D6A',
+                        }}
+                        title={item.is_active ? 'Désactiver' : 'Activer'}>
+                        {item.is_active ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                      </button>
+                      <button onClick={() => setGiveTarget(item)}
+                        className="p-1.5 rounded-lg transition-all hover:bg-[#D4A843]/15"
+                        style={{ border: '1px solid rgba(212,168,67,0.25)', color: '#D4A843' }}
+                        title="Donner à un joueur">
+                        <Gift size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── INVENTORY VIEW ── */}
+      {view === 'inventory' && (
+        <div className="space-y-4">
+          <div className="rpg-card p-5">
+            <h3 className="font-cinzel font-bold text-white mb-4 flex items-center gap-2">
+              <Wallet size={16} className="text-[#D4A843]" /> Inventaire d&apos;un joueur
+            </h3>
+            <div className="flex gap-2">
+              <select value={invUserId} onChange={e => setInvUserId(e.target.value)}
+                className="flex-1 bg-[#080A12] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#D4A843]/50">
+                <option value="">Sélectionner un joueur...</option>
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>{u.full_name || u.email} ({u.role})</option>
+                ))}
+              </select>
+              <button onClick={loadInventory} disabled={!invUserId || invLoading}
+                className="px-4 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-40"
+                style={{ background: 'rgba(212,168,67,0.15)', border: '1px solid rgba(212,168,67,0.3)', color: '#D4A843' }}>
+                {invLoading ? '...' : 'Voir'}
+              </button>
+            </div>
+          </div>
+
+          {inventory.length > 0 && (
+            <div className="rpg-card p-5">
+              <p className="text-gray-400 text-xs mb-3">{inventory.length} item{inventory.length > 1 ? 's' : ''}</p>
+              <div className="space-y-2">
+                {inventory.map(inv => {
+                  const item = inv.shop_items
+                  if (!item) return null
+                  const rc = RARITY_COLOR[item.rarity] ?? '#9CA3AF'
+                  return (
+                    <div key={inv.id} className="flex items-center gap-3 p-3 rounded-xl"
+                      style={{ background: '#080A12', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <span className="text-xl flex-shrink-0">{item.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-white text-sm font-medium truncate">{item.name}</span>
+                          <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: `${rc}20`, color: rc }}>{item.rarity}</span>
+                          {inv.is_equipped && <span className="text-xs text-green-400">✓ Équipé</span>}
+                        </div>
+                        <p className="text-gray-600 text-xs">{item.item_type} · {new Date(inv.created_at).toLocaleDateString('fr-CA')}</p>
+                      </div>
+                      <button onClick={() => removeFromInventory(inv.id)}
+                        className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 transition-colors"
+                        title="Retirer de l'inventaire">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── MODAL: Give item ── */}
+      {giveTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.85)' }}
+          onClick={() => setGiveTarget(null)}>
+          <div className="w-full max-w-md rpg-card p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-cinzel font-bold text-white">Donner un item</h3>
+              <button onClick={() => setGiveTarget(null)} className="text-gray-500 hover:text-white"><X size={18} /></button>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-xl mb-5"
+              style={{ background: '#080A12', border: `1px solid ${RARITY_COLOR[giveTarget.rarity] ?? '#9CA3AF'}30` }}>
+              <span className="text-3xl">{giveTarget.icon}</span>
+              <div>
+                <p className="text-white font-semibold">{giveTarget.name}</p>
+                <p className="text-xs" style={{ color: RARITY_COLOR[giveTarget.rarity] }}>{giveTarget.rarity}</p>
+              </div>
+            </div>
+            <label className="block text-gray-400 text-xs uppercase tracking-wider mb-2">Joueur</label>
+            <select value={giveUserId} onChange={e => setGiveUserId(e.target.value)}
+              className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm mb-4 focus:outline-none focus:border-[#D4A843]/50">
+              <option value="">Sélectionner un joueur...</option>
+              {users.map(u => (
+                <option key={u.id} value={u.id}>{u.full_name || u.email}</option>
+              ))}
+            </select>
+            <button onClick={giveItem} disabled={!giveUserId || giving}
+              className="w-full py-3 rounded-xl font-cinzel font-bold text-sm transition-all disabled:opacity-40"
+              style={{ background: 'linear-gradient(135deg, #D4A843, #B8892A)', color: '#080A12' }}>
+              {giving ? 'Envoi...' : `🎁 Donner "${giveTarget.name}"`}
+            </button>
+          </div>
         </div>
       )}
     </div>

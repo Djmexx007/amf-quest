@@ -52,10 +52,11 @@ const DEFAULT_POOL: RewardEntry[] = [
 ]
 
 // Chest cost (for coins compensation on duplicate/all-owned)
+// Must match cost_coins in shop_items: Boîte Mystère=250, Coffre Rare=600, Coffre Légendaire=1500
 const CHEST_COST: Record<string, number> = {
-  novice:    400,
-  elite:     1200,
-  legendary: 3000,
+  novice:    250,
+  elite:     600,
+  legendary: 1500,
 }
 
 // Item grant chance per chest tier (0 = never, updated probabilities)

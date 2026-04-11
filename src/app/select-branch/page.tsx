@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import StarfieldBg from '@/components/layout/StarfieldBg'
+import { useAuthStore } from '@/stores/authStore'
 
 interface Branch {
   id: string
@@ -16,6 +17,7 @@ interface Branch {
 
 export default function SelectBranchPage() {
   const router = useRouter()
+  const { user, setUser } = useAuthStore()
   const [branches, setBranches] = useState<Branch[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [characterName, setCharacterName] = useState('')
@@ -46,6 +48,10 @@ export default function SelectBranchPage() {
       if (!res.ok) {
         setError(data.error ?? 'Erreur lors de la sélection.')
         return
+      }
+      // Update the cached user in the store so AuthProvider doesn't redirect back
+      if (user) {
+        setUser({ ...user, selected_branch_id: selected, branch_locked: true })
       }
       router.push('/dashboard')
     } catch {

@@ -60,6 +60,17 @@ const BG_PREVIEW: Record<string, { bg: string; stars: string }> = {
   astral:         { bg: 'radial-gradient(ellipse at 45% 55%, #0A051E, #050310)', stars: 'rgba(120,150,255,0.6)'  },
   interstellaire: { bg: 'radial-gradient(ellipse at 50% 50%, #010208, #000103)', stars: 'rgba(200,220,255,0.5)'  },
   neant:          { bg: 'radial-gradient(ellipse at 50% 50%, #020202, #010101)', stars: 'rgba(100,100,100,0.3)'  },
+  // Nouveaux — exclusifs coffres
+  bloodmoon:      { bg: 'radial-gradient(ellipse at 50% 0%, #3D0000, #1A0000)',   stars: 'rgba(255,0,50,0.6)'    },
+  emerald:        { bg: 'radial-gradient(ellipse at 30% 70%, #002010, #001008)',   stars: 'rgba(0,255,100,0.55)'  },
+  frost:          { bg: 'radial-gradient(ellipse at 50% 30%, #001830, #000A1E)',   stars: 'rgba(180,230,255,0.7)' },
+  storm:          { bg: 'radial-gradient(ellipse at 60% 20%, #050E1A, #020810)',   stars: 'rgba(80,160,255,0.6)'  },
+  quantum:        { bg: 'radial-gradient(ellipse at 40% 60%, #001818, #000E0E)',   stars: 'rgba(0,255,220,0.65)'  },
+  plasma:         { bg: 'radial-gradient(ellipse at 70% 30%, #2A0025, #140011)',   stars: 'rgba(255,80,240,0.65)' },
+  cyber:          { bg: 'radial-gradient(ellipse at 50% 50%, #001525, #000812)',   stars: 'rgba(0,200,255,0.7)'   },
+  inferno:        { bg: 'radial-gradient(ellipse at 50% 0%, #401000, #1E0800)',    stars: 'rgba(255,120,0,0.7)'   },
+  spectral:       { bg: 'radial-gradient(ellipse at 35% 65%, #050818, #02030C)',   stars: 'rgba(130,200,255,0.5)' },
+  shadow:         { bg: 'radial-gradient(ellipse at 50% 50%, #080010, #040008)',   stars: 'rgba(140,60,200,0.4)'  },
 }
 
 const TYPE_CONFIG: Record<string, { label: string; icon: React.ReactNode }> = {
