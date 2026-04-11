@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
   const { data: inventory, error } = await supabaseAdmin
     .from('user_inventory')
-    .select('id, item_id, branch_id, is_equipped, created_at, shop_items(name, icon, item_type, rarity, effect, is_consumable)')
+    .select('id, item_id, branch_id, is_equipped, acquired_at, shop_items(name, icon, item_type, rarity, effect, is_consumable)')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
 

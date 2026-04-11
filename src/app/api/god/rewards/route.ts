@@ -96,41 +96,52 @@ export async function POST(request: NextRequest) {
         .eq('id', item_id)
         .single()
 
-      if (item) {
-        // Use user's selected branch if no branch_id provided
-        const effectiveBranchId = branch_id ?? (
-          await supabaseAdmin.from('users').select('selected_branch_id').eq('id', user_id).single()
-        ).data?.selected_branch_id
+      if (!item) {
+        return NextResponse.json({ error: 'Item introuvable.' }, { status: 404 })
+      }
 
-        if (effectiveBranchId) {
-          // For non-consumable items, skip if already owned
-          if (!item.is_consumable) {
-            const { data: existing } = await supabaseAdmin
-              .from('user_inventory')
-              .select('id')
-              .eq('user_id', user_id)
-              .eq('item_id', item_id)
-              .maybeSingle()
-            if (!existing) {
-              await supabaseAdmin.from('user_inventory').insert({
-                user_id,
-                branch_id: effectiveBranchId,
-                item_id,
-                is_equipped: false,
-              })
-            }
-          } else {
-            // Consumables can always be added
-            await supabaseAdmin.from('user_inventory').insert({
-              user_id,
-              branch_id: effectiveBranchId,
-              item_id,
-              is_equipped: false,
-            })
-          }
-          affected++
+      // Resolve branch: explicit > user.selected_branch_id > any character branch
+      let effectiveBranchId: string | null = branch_id ?? (
+        await supabaseAdmin.from('users').select('selected_branch_id').eq('id', user_id).single()
+      ).data?.selected_branch_id ?? null
+
+      if (!effectiveBranchId) {
+        const { data: anyChar } = await supabaseAdmin
+          .from('characters')
+          .select('branch_id')
+          .eq('user_id', user_id)
+          .limit(1)
+          .maybeSingle()
+        effectiveBranchId = anyChar?.branch_id ?? null
+      }
+
+      if (!effectiveBranchId) {
+        return NextResponse.json({ error: 'Impossible de déterminer la branche de cet utilisateur.' }, { status: 400 })
+      }
+
+      // For non-consumable items, skip if already owned
+      if (!item.is_consumable) {
+        const { data: existing } = await supabaseAdmin
+          .from('user_inventory')
+          .select('id')
+          .eq('user_id', user_id)
+          .eq('item_id', item_id)
+          .maybeSingle()
+        if (existing) {
+          return NextResponse.json({ error: 'Cet utilisateur possède déjà cet item.' }, { status: 409 })
         }
       }
+
+      const { error: insertError } = await supabaseAdmin.from('user_inventory').insert({
+        user_id,
+        branch_id: effectiveBranchId,
+        item_id,
+        is_equipped: false,
+      })
+      if (insertError) {
+        return NextResponse.json({ error: 'Erreur lors de l\'ajout à l\'inventaire.' }, { status: 500 })
+      }
+      affected++
     }
 
     // Notification

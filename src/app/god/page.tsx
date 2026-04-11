@@ -1698,7 +1698,7 @@ interface InventoryEntry {
   item_id: string
   branch_id: string
   is_equipped: boolean
-  created_at: string
+  acquired_at: string
   shop_items: { name: string; icon: string; item_type: string; rarity: string; effect: Record<string, unknown>; is_consumable: boolean } | null
 }
 
@@ -1719,9 +1719,13 @@ function ShopManagementTab({ addToast }: { addToast: AddToast }) {
   const [giveUserId, setGiveUserId] = useState('')
   const [giving, setGiving] = useState(false)
   const [invUserId, setInvUserId] = useState('')
+  const [invUserName, setInvUserName] = useState('')
   const [inventory, setInventory] = useState<InventoryEntry[]>([])
+  const [invLoaded, setInvLoaded] = useState(false)
   const [invLoading, setInvLoading] = useState(false)
   const [users, setUsers] = useState<BulkUser[]>([])
+  const [userSearch, setUserSearch] = useState('')
+  const [userSearchLoading, setUserSearchLoading] = useState(false)
 
   const loadItems = useCallback(async () => {
     setLoading(true)
@@ -1735,6 +1739,18 @@ function ShopManagementTab({ addToast }: { addToast: AddToast }) {
     loadItems()
     fetch('/api/god/users').then(r => r.json()).then(d => setUsers(d.users ?? []))
   }, [loadItems])
+
+  useEffect(() => {
+    if (!userSearch.trim()) { setUsers([]); return }
+    setUserSearchLoading(true)
+    const t = setTimeout(() => {
+      fetch(`/api/god/users?search=${encodeURIComponent(userSearch)}`)
+        .then(r => r.json())
+        .then(d => setUsers(d.users ?? []))
+        .finally(() => setUserSearchLoading(false))
+    }, 300)
+    return () => clearTimeout(t)
+  }, [userSearch])
 
   const filtered = items.filter(item => {
     const isChest = !!(item.effect as Record<string, unknown>)?.mystery_box
@@ -1781,22 +1797,36 @@ function ShopManagementTab({ addToast }: { addToast: AddToast }) {
     })
     const data = await res.json()
     setGiving(false)
-    if (res.ok) {
-      addToast({ type: 'success', title: `"${giveTarget.name}" donné !` })
+    if (!res.ok) {
+      addToast({ type: 'error', title: data.error ?? 'Erreur serveur' })
+    } else if ((data.affected ?? 0) === 0) {
+      addToast({ type: 'error', title: 'Échec : aucun personnage trouvé pour cet utilisateur.' })
+    } else {
+      addToast({ type: 'success', title: `"${giveTarget.name}" ajouté à l'inventaire !` })
+      const targetId = giveUserId
       setGiveTarget(null)
       setGiveUserId('')
-    } else {
-      addToast({ type: 'error', title: data.error ?? 'Erreur' })
+      // Auto-refresh inventory if currently viewing this user
+      if (invUserId === targetId && invLoaded) {
+        const res2 = await fetch(`/api/god/inventory?user_id=${encodeURIComponent(targetId)}`)
+        const d2 = await res2.json()
+        if (res2.ok) setInventory(d2.inventory ?? [])
+      }
     }
   }
 
   async function loadInventory() {
     if (!invUserId) return
     setInvLoading(true)
-    const res = await fetch(`/api/god/inventory?user_id=${invUserId}`)
-    const data = await res.json()
-    setInventory(data.inventory ?? [])
-    setInvLoading(false)
+    setInvLoaded(false)
+    try {
+      const res = await fetch(`/api/god/inventory?user_id=${encodeURIComponent(invUserId)}`)
+      const data = await res.json()
+      if (!res.ok) { addToast({ type: 'error', title: data.error ?? 'Erreur serveur' }); return }
+      setInventory(data.inventory ?? [])
+      setInvLoaded(true)
+    } catch { addToast({ type: 'error', title: 'Erreur réseau' }) }
+    finally { setInvLoading(false) }
   }
 
   async function removeFromInventory(invId: string) {
@@ -1935,52 +1965,80 @@ function ShopManagementTab({ addToast }: { addToast: AddToast }) {
             <h3 className="font-cinzel font-bold text-white mb-4 flex items-center gap-2">
               <Wallet size={16} className="text-[#D4A843]" /> Inventaire d&apos;un joueur
             </h3>
-            <div className="flex gap-2">
-              <select value={invUserId} onChange={e => setInvUserId(e.target.value)}
-                className="flex-1 bg-[#080A12] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#D4A843]/50">
-                <option value="">Sélectionner un joueur...</option>
-                {users.map(u => (
-                  <option key={u.id} value={u.id}>{u.full_name || u.email} ({u.role})</option>
-                ))}
-              </select>
-              <button onClick={loadInventory} disabled={!invUserId || invLoading}
-                className="px-4 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-40"
-                style={{ background: 'rgba(212,168,67,0.15)', border: '1px solid rgba(212,168,67,0.3)', color: '#D4A843' }}>
-                {invLoading ? '...' : 'Voir'}
-              </button>
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={userSearch}
+                onChange={e => { setUserSearch(e.target.value); setInvUserId(''); setInvUserName(''); setInvLoaded(false) }}
+                placeholder="Rechercher un joueur (nom ou email)..."
+                className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#D4A843]/50"
+              />
+              {userSearchLoading && <p className="text-gray-500 text-xs px-1">Recherche...</p>}
+              {users.length > 0 && !invUserId && (
+                <div className="border border-white/10 rounded-lg overflow-hidden max-h-48 overflow-y-auto">
+                  {users.map(u => (
+                    <button key={u.id} onClick={() => { setInvUserId(u.id); setInvUserName(u.full_name || u.email); setUserSearch(u.full_name || u.email); setUsers([]) }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.04] transition-colors border-b border-white/5 last:border-0">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm truncate">{u.full_name || '—'}</p>
+                        <p className="text-gray-500 text-xs truncate">{u.email}</p>
+                      </div>
+                      <span className="text-xs px-1.5 py-0.5 rounded flex-shrink-0 text-[#D4A843] bg-[#D4A843]/10">{u.role}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {invUserId && (
+                <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#D4A843]/10 border border-[#D4A843]/20">
+                  <span className="text-[#D4A843] text-sm font-medium">{invUserName}</span>
+                  <button onClick={() => { setInvUserId(''); setInvUserName(''); setUserSearch(''); setInvLoaded(false); setInventory([]) }}
+                    className="text-gray-500 hover:text-white transition-colors"><X size={14} /></button>
+                </div>
+              )}
             </div>
+            <button onClick={loadInventory} disabled={!invUserId || invLoading}
+              className="mt-3 w-full py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-40"
+              style={{ background: 'rgba(212,168,67,0.15)', border: '1px solid rgba(212,168,67,0.3)', color: '#D4A843' }}>
+              {invLoading ? 'Chargement...' : 'Voir l\'inventaire'}
+            </button>
           </div>
 
-          {inventory.length > 0 && (
-            <div className="rpg-card p-5">
-              <p className="text-gray-400 text-xs mb-3">{inventory.length} item{inventory.length > 1 ? 's' : ''}</p>
-              <div className="space-y-2">
-                {inventory.map(inv => {
-                  const item = inv.shop_items
-                  if (!item) return null
-                  const rc = RARITY_COLOR[item.rarity] ?? '#9CA3AF'
-                  return (
-                    <div key={inv.id} className="flex items-center gap-3 p-3 rounded-xl"
-                      style={{ background: '#080A12', border: '1px solid rgba(255,255,255,0.05)' }}>
-                      <span className="text-xl flex-shrink-0">{item.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-white text-sm font-medium truncate">{item.name}</span>
-                          <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: `${rc}20`, color: rc }}>{item.rarity}</span>
-                          {inv.is_equipped && <span className="text-xs text-green-400">✓ Équipé</span>}
-                        </div>
-                        <p className="text-gray-600 text-xs">{item.item_type} · {new Date(inv.created_at).toLocaleDateString('fr-CA')}</p>
-                      </div>
-                      <button onClick={() => removeFromInventory(inv.id)}
-                        className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 transition-colors"
-                        title="Retirer de l'inventaire">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  )
-                })}
+          {invLoaded && (
+            inventory.length === 0 ? (
+              <div className="rpg-card p-8 text-center">
+                <p className="text-gray-500 text-sm">Inventaire vide.</p>
               </div>
-            </div>
+            ) : (
+              <div className="rpg-card p-5">
+                <p className="text-gray-400 text-xs mb-3">{inventory.length} item{inventory.length > 1 ? 's' : ''}</p>
+                <div className="space-y-2">
+                  {inventory.map(inv => {
+                    const item = inv.shop_items
+                    if (!item) return null
+                    const rc = RARITY_COLOR[item.rarity] ?? '#9CA3AF'
+                    return (
+                      <div key={inv.id} className="flex items-center gap-3 p-3 rounded-xl"
+                        style={{ background: '#080A12', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <span className="text-xl flex-shrink-0">{item.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-white text-sm font-medium truncate">{item.name}</span>
+                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: `${rc}20`, color: rc }}>{item.rarity}</span>
+                            {inv.is_equipped && <span className="text-xs text-green-400">✓ Équipé</span>}
+                          </div>
+                          <p className="text-gray-600 text-xs">{item.item_type} · {new Date(inv.acquired_at).toLocaleDateString('fr-CA')}</p>
+                        </div>
+                        <button onClick={() => removeFromInventory(inv.id)}
+                          className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 transition-colors flex-shrink-0"
+                          title="Retirer de l'inventaire">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
           )}
         </div>
       )}
