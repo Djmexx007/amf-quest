@@ -10,6 +10,7 @@ const BASE_XP: Record<GameType, number> = {
   detective: 45,
   'trivia-crack': 25,
   platformer: 30,
+  exam: 60,
 }
 
 const DIFF_MULTIPLIER = { 1: 1, 2: 1.5, 3: 2.5 }

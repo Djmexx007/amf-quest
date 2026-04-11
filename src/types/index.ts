@@ -28,6 +28,7 @@ export type GameType =
   | 'detective'
   | 'trivia-crack'
   | 'platformer'
+  | 'exam'
 
 export type ItemType = 'avatar' | 'title' | 'boost' | 'cosmetic'
 
