@@ -15,6 +15,19 @@ interface InviteInfo {
   branches: Branch[]
 }
 
+function timeLeft(expiresAt: string): { text: string; urgent: boolean } {
+  const diff = new Date(expiresAt).getTime() - Date.now()
+  if (diff <= 0) return { text: 'Expirée', urgent: true }
+  const totalMinutes = Math.floor(diff / 60000)
+  const days = Math.floor(totalMinutes / 1440)
+  const hours = Math.floor((totalMinutes % 1440) / 60)
+  const minutes = totalMinutes % 60
+  const urgent = diff < 6 * 3600 * 1000
+  if (days > 0) return { text: `${days}j ${hours}h`, urgent }
+  if (hours > 0) return { text: `${hours}h ${minutes}m`, urgent }
+  return { text: `${minutes}m`, urgent: true }
+}
+
 export default function InvitePage() {
   const { token } = useParams<{ token: string }>()
   const router = useRouter()
@@ -22,6 +35,8 @@ export default function InvitePage() {
   const [invite, setInvite] = useState<InviteInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [expiredMsg, setExpiredMsg] = useState('')
+  const [, setTick] = useState(0)
 
   const [pseudo, setPseudo] = useState('')
   const [branchId, setBranchId] = useState('')
@@ -36,55 +51,46 @@ export default function InvitePage() {
       .then((d) => {
         if (d.error) {
           setNotFound(true)
+          setExpiredMsg(d.error)
         } else {
           setInvite(d)
           setPseudo(d.full_name ?? '')
-          setBranchId(d.suggested_branch_id ?? (d.branches?.[0]?.id ?? ''))
+          const preselect = d.suggested_branch_id ?? (d.branches?.length === 1 ? d.branches[0].id : '')
+          setBranchId(preselect)
         }
       })
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false))
   }, [token])
 
+  // Refresh countdown every 30s
+  useEffect(() => {
+    if (!invite) return
+    const id = setInterval(() => setTick(t => t + 1), 30000)
+    return () => clearInterval(id)
+  }, [invite])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
 
-    if (!pseudo.trim()) {
-      setError('Choisis un pseudo.')
-      return
-    }
-    if (invite?.branches && invite.branches.length > 0 && !branchId) {
-      setError('Sélectionne ta branche.')
-      return
-    }
-    if (password.length < 8) {
-      setError('Le mot de passe doit contenir au moins 8 caractères.')
-      return
-    }
-    if (password !== confirmPassword) {
-      setError('Les mots de passe ne correspondent pas.')
-      return
-    }
+    if (!pseudo.trim()) { setError('Choisis un pseudo.'); return }
+
+    const needBranchPick = invite?.branches && invite.branches.length > 1 && !invite.suggested_branch_id
+    if (needBranchPick && !branchId) { setError('Sélectionne ta branche.'); return }
+
+    if (password.length < 8) { setError('Le mot de passe doit contenir au moins 8 caractères.'); return }
+    if (password !== confirmPassword) { setError('Les mots de passe ne correspondent pas.'); return }
 
     setSubmitting(true)
     try {
       const res = await fetch('/api/invite/accept', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          password,
-          full_name: pseudo.trim(),
-          branch_id: branchId || undefined,
-        }),
+        body: JSON.stringify({ token, password, full_name: pseudo.trim(), branch_id: branchId || undefined }),
       })
       const data = await res.json()
-      if (!res.ok) {
-        setError(data.error ?? 'Erreur lors de la création du compte.')
-        return
-      }
-      // Cookies are set by the server — redirect straight to dashboard
+      if (!res.ok) { setError(data.error ?? 'Erreur lors de la création du compte.'); return }
       router.push('/dashboard')
     } catch {
       setError('Impossible de contacter le serveur.')
@@ -109,7 +115,7 @@ export default function InvitePage() {
           <div className="text-5xl mb-4">🚫</div>
           <h1 className="font-cinzel text-2xl text-white mb-3">Invitation invalide</h1>
           <p className="text-gray-400 text-sm">
-            Ce lien est expiré, déjà utilisé, ou n&apos;existe pas.
+            {expiredMsg || 'Ce lien est expiré, déjà utilisé, ou n\'existe pas.'}
           </p>
           <a href="/login" className="mt-6 inline-block text-[#D4A843] text-sm hover:underline">
             Retour à la connexion
@@ -119,7 +125,11 @@ export default function InvitePage() {
     )
   }
 
-  const hasBranches = (invite?.branches?.length ?? 0) > 0
+  const branchLocked = !!invite?.suggested_branch_id
+  const onlyOneBranch = (invite?.branches?.length ?? 0) === 1
+  const showBranchSelector = !branchLocked && !onlyOneBranch && (invite?.branches?.length ?? 0) > 0
+  const assignedBranch = (branchLocked || onlyOneBranch) ? invite?.branches?.find(b => b.id === branchId) : null
+  const expiry = invite ? timeLeft(invite.expires_at) : null
 
   return (
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#080A12]">
@@ -137,9 +147,26 @@ export default function InvitePage() {
         </div>
 
         <div className="rpg-card p-8">
+          {/* Invite header with expiry countdown */}
           <div className="mb-6 p-4 rounded-lg bg-[#D4A843]/10 border border-[#D4A843]/20">
-            <p className="text-[#D4A843] text-xs uppercase tracking-wider mb-1">Invitation pour</p>
-            <p className="text-white font-semibold">{invite?.email}</p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[#D4A843] text-xs uppercase tracking-wider mb-1">Invitation pour</p>
+                <p className="text-white font-semibold truncate">{invite?.email}</p>
+              </div>
+              {expiry && (
+                <div className="text-right flex-shrink-0">
+                  <p className="text-[10px] uppercase tracking-wider mb-0.5"
+                    style={{ color: expiry.urgent ? '#FF4D6A' : '#6B7280' }}>
+                    Expire dans
+                  </p>
+                  <p className="text-sm font-semibold font-mono"
+                    style={{ color: expiry.urgent ? '#FF4D6A' : '#9CA3AF' }}>
+                    {expiry.text}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           {error && (
@@ -164,8 +191,23 @@ export default function InvitePage() {
               />
             </div>
 
-            {/* Branch selector */}
-            {hasBranches && (
+            {/* Branch — locked or auto-selected (single) */}
+            {assignedBranch && (
+              <div>
+                <label className="block text-gray-400 text-xs uppercase tracking-wider mb-2">
+                  Ta branche{branchLocked && <span className="normal-case text-gray-600"> (assignée)</span>}
+                </label>
+                <div className="flex items-center gap-3 px-4 py-3 rounded-lg"
+                  style={{ background: `${assignedBranch.color}15`, border: `1px solid ${assignedBranch.color}40` }}>
+                  <span className="text-xl">{assignedBranch.icon}</span>
+                  <span className="text-sm font-semibold" style={{ color: assignedBranch.color }}>{assignedBranch.name}</span>
+                  <span className="ml-auto text-xs" style={{ color: assignedBranch.color }}>✓</span>
+                </div>
+              </div>
+            )}
+
+            {/* Branch selector — only for multiple choices, no pre-assignment */}
+            {showBranchSelector && (
               <div>
                 <label className="block text-gray-400 text-xs uppercase tracking-wider mb-2">
                   Ta branche

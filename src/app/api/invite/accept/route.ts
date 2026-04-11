@@ -102,6 +102,7 @@ export async function POST(request: NextRequest) {
       expires_at: expiresAt,
       invited_by: invite.invited_by,
       selected_branch_id: selectedBranchId,
+      branch_locked: !!selectedBranchId,
     })
     .select('id, email, full_name, role, status, selected_branch_id, branch_locked')
     .single()

@@ -34,13 +34,13 @@ export async function POST(request: NextRequest) {
 
   if (!email) return NextResponse.json({ error: 'Email requis.' }, { status: 400 })
 
-  // Only valid roles: user and moderator
-  if (!['user', 'moderator'].includes(role as string)) {
-    return NextResponse.json({ error: 'Rôle invalide. Valeurs acceptées: user, moderator.' }, { status: 400 })
+  // Validate role
+  if (!['user', 'moderator', 'god'].includes(role as string)) {
+    return NextResponse.json({ error: 'Rôle invalide.' }, { status: 400 })
   }
-  // Only god can invite moderators
-  if (role === 'moderator' && payload.role !== 'god') {
-    return NextResponse.json({ error: 'Seul le GOD peut inviter des modérateurs.' }, { status: 403 })
+  // Only god can invite moderators or gods
+  if ((role === 'moderator' || role === 'god') && payload.role !== 'god') {
+    return NextResponse.json({ error: 'Seul le GOD peut inviter des modérateurs ou des dieux.' }, { status: 403 })
   }
 
   // Check if email already invited or has account
