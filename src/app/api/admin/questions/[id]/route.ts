@@ -60,10 +60,7 @@ export async function PATCH(
   // ── Toggle active ─────────────────────────────────────────────
   if (action === 'toggle') {
     const { data: q } = await supabaseAdmin
-      .from('questions')
-      .select('is_active, status')
-      .eq('id', id)
-      .single()
+      .from('questions').select('is_active').eq('id', id).single()
     if (!q) return NextResponse.json({ error: 'Question introuvable.' }, { status: 404 })
 
     const nowActive = !q.is_active
@@ -81,48 +78,50 @@ export async function PATCH(
     return NextResponse.json({ is_active: nowActive })
   }
 
-  // ── Request deletion (moderator+) ─────────────────────────────
+  // ── Request deletion — stored in admin_logs, no schema change needed ──
   if (action === 'request_delete') {
-    const { error } = await supabaseAdmin
-      .from('questions')
-      .update({
-        delete_requested_by: payload.sub,
-        delete_requested_at: new Date().toISOString(),
-      })
-      .eq('id', id)
+    // Check if already pending for this question
+    const { count: existing } = await supabaseAdmin
+      .from('admin_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('action', 'request_delete_question')
+      .filter('details->>question_id', 'eq', id)
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if ((existing ?? 0) > 0) {
+      return NextResponse.json({ error: 'Une demande de suppression est déjà en cours.' }, { status: 409 })
+    }
 
-    await supabaseAdmin.from('admin_logs').insert({
+    const { error } = await supabaseAdmin.from('admin_logs').insert({
       admin_id: payload.sub,
       action: 'request_delete_question',
       details: { question_id: id },
     })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     return NextResponse.json({ message: 'Demande de suppression envoyée au God Panel.' })
   }
 
-  // ── Cancel deletion request ───────────────────────────────────
+  // ── Cancel / deny deletion request ───────────────────────────
   if (action === 'cancel_delete') {
-    // Non-god: can only cancel their own request
+    // God can cancel any request; others only their own
+    let deleteQ = supabaseAdmin
+      .from('admin_logs')
+      .delete()
+      .eq('action', 'request_delete_question')
+      .filter('details->>question_id', 'eq', id)
+
     if (!isGod(payload.role)) {
-      const { data: q } = await supabaseAdmin
-        .from('questions')
-        .select('delete_requested_by')
-        .eq('id', id)
-        .single()
-      if (!q) return NextResponse.json({ error: 'Question introuvable.' }, { status: 404 })
-      if (q.delete_requested_by !== payload.sub) {
-        return NextResponse.json({ error: 'Vous ne pouvez annuler que vos propres demandes.' }, { status: 403 })
-      }
+      deleteQ = deleteQ.eq('admin_id', payload.sub)
     }
 
-    const { error } = await supabaseAdmin
-      .from('questions')
-      .update({ delete_requested_by: null, delete_requested_at: null })
-      .eq('id', id)
-
+    const { error } = await deleteQ
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    await supabaseAdmin.from('admin_logs').insert({
+      admin_id: payload.sub,
+      action: 'deny_delete_question',
+      details: { question_id: id },
+    })
 
     return NextResponse.json({ message: 'Demande de suppression annulée.' })
   }
@@ -151,20 +150,20 @@ export async function PATCH(
 
     if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
 
-    // Replace answers if provided
     if (answers && answers.length >= 2) {
       const filled = answers.filter(a => a.answer_text.trim())
       if (filled.length < 2) {
         return NextResponse.json({ error: 'Au moins 2 réponses requises.' }, { status: 400 })
       }
       await supabaseAdmin.from('answers').delete().eq('question_id', id)
-      const rows = filled.map((a, i) => ({
-        question_id: id,
-        answer_text: a.answer_text.trim(),
-        is_correct: a.is_correct,
-        order_index: i,
-      }))
-      const { error: ansErr } = await supabaseAdmin.from('answers').insert(rows)
+      const { error: ansErr } = await supabaseAdmin.from('answers').insert(
+        filled.map((a, i) => ({
+          question_id: id,
+          answer_text: a.answer_text.trim(),
+          is_correct: a.is_correct,
+          order_index: i,
+        }))
+      )
       if (ansErr) return NextResponse.json({ error: ansErr.message }, { status: 500 })
     }
 

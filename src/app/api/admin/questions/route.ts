@@ -4,6 +4,41 @@ import { verifyAccessToken } from '@/lib/auth'
 import { isModerator, isGod } from '@/lib/permissions'
 import type { QuestionType } from '@/types'
 
+// ── Helpers ────────────────────────────────────────────────────
+
+const QUESTION_SELECT = `
+  id, question_text, question_type, difficulty, status, category_id,
+  branch_id, is_active, created_by, created_at, game_types,
+  explanation, tip,
+  answers(id, answer_text, is_correct, order_index),
+  branches(name, color),
+  question_categories(name, icon, color)
+`
+
+/** Returns a map of question_id → requester admin_id for all pending delete requests. */
+async function getPendingDeleteMap(): Promise<Map<string, string>> {
+  const { data: logs } = await supabaseAdmin
+    .from('admin_logs')
+    .select('admin_id, action, details, created_at')
+    .in('action', ['request_delete_question', 'cancel_delete_question', 'deny_delete_question'])
+    .order('created_at', { ascending: false })
+
+  // For each question_id, the MOST RECENT event determines pending status
+  const latestByQuestion = new Map<string, { action: string; admin_id: string }>()
+  for (const event of logs ?? []) {
+    const qid = (event.details as Record<string, string> | null)?.question_id
+    if (qid && !latestByQuestion.has(qid)) {
+      latestByQuestion.set(qid, { action: event.action, admin_id: event.admin_id })
+    }
+  }
+
+  const pending = new Map<string, string>()
+  for (const [qid, { action, admin_id }] of latestByQuestion) {
+    if (action === 'request_delete_question') pending.set(qid, admin_id)
+  }
+  return pending
+}
+
 // GET — list questions with filters
 export async function GET(request: NextRequest) {
   const token = request.cookies.get('amf_access')?.value
@@ -14,49 +49,63 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = request.nextUrl
-  const statusFilter  = searchParams.get('status')    // 'pending' | 'approved' | 'rejected' | 'all'
+  const statusFilter  = searchParams.get('status')
   const branchId      = searchParams.get('branch_id')
   const gameType      = searchParams.get('game_type')
   const qType         = searchParams.get('question_type')
   const page          = Math.max(1, Number(searchParams.get('page') ?? '1'))
   const perPage       = 20
   const offset        = (page - 1) * perPage
-
   const deleteRequested = searchParams.get('delete_requested') === 'true'
 
+  // ── delete_requested mode: fetch pending question IDs from admin_logs ──
+  if (deleteRequested) {
+    const pendingMap = await getPendingDeleteMap()
+    const pendingIds = [...pendingMap.keys()]
+
+    if (pendingIds.length === 0) {
+      return NextResponse.json({ questions: [], total: 0, page: 1, per_page: perPage })
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('questions')
+      .select(QUESTION_SELECT)
+      .in('id', pendingIds)
+      .order('created_at', { ascending: false })
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    const enriched = (data ?? []).map(q => ({
+      ...q,
+      delete_requested_by: pendingMap.get(q.id) ?? null,
+    }))
+
+    return NextResponse.json({ questions: enriched, total: enriched.length, page: 1, per_page: perPage })
+  }
+
+  // ── Normal paginated mode ──────────────────────────────────────
   let query = supabaseAdmin
     .from('questions')
-    .select(
-      `id, question_text, question_type, difficulty, status, category_id,
-       branch_id, is_active, created_by, created_at, game_types,
-       delete_requested_by, delete_requested_at, explanation, tip,
-       answers(id, answer_text, is_correct, order_index),
-       branches(name, color),
-       question_categories(name, icon, color)`,
-      { count: 'exact' }
-    )
+    .select(QUESTION_SELECT, { count: 'exact' })
     .order('created_at', { ascending: false })
     .range(offset, offset + perPage - 1)
 
-  if (deleteRequested) {
-    query = query.not('delete_requested_by', 'is', null)
-  } else if (statusFilter && statusFilter !== 'all') {
-    query = query.eq('status', statusFilter)
-  }
-  if (branchId) {
-    query = query.eq('branch_id', branchId)
-  }
-  if (gameType) {
-    query = query.contains('game_types', [gameType])
-  }
-  if (qType) {
-    query = query.eq('question_type', qType)
-  }
+  if (statusFilter && statusFilter !== 'all') query = query.eq('status', statusFilter)
+  if (branchId)  query = query.eq('branch_id', branchId)
+  if (gameType)  query = query.contains('game_types', [gameType])
+  if (qType)     query = query.eq('question_type', qType)
 
   const { data, error, count } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ questions: data ?? [], total: count ?? 0, page, per_page: perPage })
+  // Merge pending delete-request info
+  const pendingMap = await getPendingDeleteMap()
+  const enriched = (data ?? []).map(q => ({
+    ...q,
+    delete_requested_by: pendingMap.get(q.id) ?? null,
+  }))
+
+  return NextResponse.json({ questions: enriched, total: count ?? 0, page, per_page: perPage })
 }
 
 // POST — create a question (moderator+)
@@ -94,34 +143,24 @@ export async function POST(request: NextRequest) {
     question_type = 'mcq', game_types, category_id, explanation, tip, tags, answers,
   } = body
 
-  // Required field validation
   if (!branch_id || !question_text || !difficulty || !game_types?.length || !explanation) {
     return NextResponse.json({ error: 'Champs obligatoires manquants.' }, { status: 400 })
   }
-
-  // Trivia requires a category
   if (game_types.includes('trivia-crack') && !category_id) {
     return NextResponse.json({ error: 'Une catégorie est requise pour l\'Arène du Savoir.' }, { status: 400 })
   }
-
-  // Scenario requires context
   if (game_types.includes('scenario') && !context_text?.trim()) {
     return NextResponse.json({ error: 'Un contexte est requis pour le type Scénario.' }, { status: 400 })
   }
-
   if (!answers || answers.length < 2) {
     return NextResponse.json({ error: 'Au moins 2 réponses requises.' }, { status: 400 })
   }
-
-  // MCQ / scenario / regulation: must have exactly 1 correct
   if (['mcq', 'scenario', 'regulation'].includes(question_type)) {
-    const correctCount = answers.filter(a => a.is_correct).length
-    if (correctCount !== 1) {
+    if (answers.filter(a => a.is_correct).length !== 1) {
       return NextResponse.json({ error: 'Exactement 1 réponse correcte requise.' }, { status: 400 })
     }
   }
 
-  // God questions are auto-approved; moderator questions are pending
   const autoApprove = isGod(payload.role)
 
   const { data: question, error: qErr } = await supabaseAdmin
