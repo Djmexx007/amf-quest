@@ -85,7 +85,7 @@ export async function PATCH(
       .from('admin_logs')
       .select('*', { count: 'exact', head: true })
       .eq('action', 'request_delete_question')
-      .filter('details->>question_id', 'eq', id)
+      .contains('details', { question_id: id })
 
     if ((existing ?? 0) > 0) {
       return NextResponse.json({ error: 'Une demande de suppression est déjà en cours.' }, { status: 409 })
@@ -108,7 +108,7 @@ export async function PATCH(
       .from('admin_logs')
       .delete()
       .eq('action', 'request_delete_question')
-      .filter('details->>question_id', 'eq', id)
+      .contains('details', { question_id: id })
 
     if (!isGod(payload.role)) {
       deleteQ = deleteQ.eq('admin_id', payload.sub)

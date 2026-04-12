@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Plus, BookOpen, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight,
-  Trash2, EyeOff, Tag, Filter, X,
+  Trash2, Tag, Filter, X,
 } from 'lucide-react'
 import { useUIStore } from '@/stores/uiStore'
 import { useAuth } from '@/hooks/useAuth'
@@ -390,18 +390,6 @@ export default function AdminQuestionsPage() {
                                 <XCircle size={15} />
                               </button>
                             </>
-                          )}
-                          {q.status === 'approved' && (
-                            <button onClick={() => handleApprove(q.id, 'reject')}
-                              className="p-1.5 rounded-lg text-[#F59E0B] hover:bg-[#F59E0B]/10 transition-all" title="Désactiver">
-                              <EyeOff size={15} />
-                            </button>
-                          )}
-                          {q.status === 'rejected' && (
-                            <button onClick={() => handleApprove(q.id, 'approve')}
-                              className="p-1.5 rounded-lg text-[#25C292] hover:bg-[#25C292]/10 transition-all" title="Réapprouver">
-                              <CheckCircle size={15} />
-                            </button>
                           )}
                           {/* Delete request — replaces direct delete */}
                           {q.delete_requested_by ? (

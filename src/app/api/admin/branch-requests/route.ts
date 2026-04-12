@@ -16,13 +16,13 @@ export async function GET(request: NextRequest) {
     .select(`
       id, status, reason, created_at, reviewed_at,
       user_id,
-      from_branch:branches!branch_change_requests_from_branch_id_fkey(id, name, color, icon),
-      to_branch:branches!branch_change_requests_to_branch_id_fkey(id, name, color, icon)
+      from_branch:branches!from_branch_id(id, name, color, icon),
+      to_branch:branches!to_branch_id(id, name, color, icon)
     `)
     .eq('status', status)
     .order('created_at', { ascending: false })
 
-  if (error) return NextResponse.json({ error: 'Erreur DB.' }, { status: 500 })
+  if (error) return NextResponse.json({ requests: [], total: 0 })
 
   // Fetch user names
   const userIds = [...new Set((data ?? []).map(r => r.user_id))]
