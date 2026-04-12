@@ -5,7 +5,7 @@ import {
   Crown, UserPlus, Users, GitBranch, Activity,
   Copy, Check, ScrollText, Wrench, Plus, ToggleLeft,
   ToggleRight, ChevronLeft, ChevronRight, Trash2,
-  AlertTriangle, RefreshCw, X, Gift, Wallet, Bug,
+  AlertTriangle, RefreshCw, X, Gift, Wallet, Bug, Pencil,
 } from 'lucide-react'
 import { useUIStore } from '@/stores/uiStore'
 import type { Toast } from '@/types'
@@ -856,22 +856,40 @@ function ChestPricingSection({ addToast }: { addToast: AddToast }) {
 }
 
 // ── Tab: Approbation questions ────────────────────────────────
+interface GodQuestion {
+  id: string
+  question_text: string
+  question_type: string
+  difficulty: number
+  is_active: boolean
+  created_at: string
+  explanation: string | null
+  tip: string | null
+  delete_requested_by: string | null
+  delete_requested_at: string | null
+  branches: { name: string; color: string } | null
+  answers: { id: string; answer_text: string; is_correct: boolean }[]
+}
+
+type GodQFilter = 'pending' | 'approved' | 'all' | 'delete_requests'
+
 function QuestionsApprovalTab({ addToast }: { addToast: AddToast }) {
-  const [questions, setQuestions] = useState<{
-    id: string; question_text: string; difficulty: number; is_active: boolean; created_at: string
-    branches: { name: string; color: string } | null
-    answers: { id: string; answer_text: string; is_correct: boolean }[]
-  }[]>([])
-  const [filter, setFilter] = useState<'pending' | 'active' | 'all'>('pending')
-  const [loading, setLoading] = useState(true)
+  const [questions, setQuestions] = useState<GodQuestion[]>([])
+  const [filter, setFilter]       = useState<GodQFilter>('pending')
+  const [loading, setLoading]     = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [editing, setEditing]       = useState<GodQuestion | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const DIFF_LABEL = ['', 'Débutant', 'Intermédiaire', 'Expert']
   const DIFF_COLOR = ['', '#25C292', '#F59E0B', '#FF4D6A']
 
-  const fetchQ = useCallback((f: typeof filter) => {
+  const fetchQ = useCallback((f: GodQFilter) => {
     setLoading(true)
-    fetch(`/api/admin/questions?status=${f}&page=1`)
+    const url = f === 'delete_requests'
+      ? '/api/admin/questions?delete_requested=true&page=1'
+      : `/api/admin/questions?status=${f}&page=1`
+    fetch(url)
       .then(r => r.json())
       .then(d => setQuestions(d.questions ?? []))
       .finally(() => setLoading(false))
@@ -879,10 +897,9 @@ function QuestionsApprovalTab({ addToast }: { addToast: AddToast }) {
 
   useEffect(() => { fetchQ(filter) }, [filter, fetchQ])
 
-  async function action(id: string, act: 'approve' | 'reject') {
+  async function approveReject(id: string, act: 'approve' | 'reject') {
     const res = await fetch(`/api/admin/questions/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: act }),
     })
     const data = await res.json()
@@ -891,18 +908,47 @@ function QuestionsApprovalTab({ addToast }: { addToast: AddToast }) {
     fetchQ(filter)
   }
 
+  async function directDelete(id: string) {
+    setDeletingId(null)
+    const res = await fetch(`/api/admin/questions/${id}`, { method: 'DELETE' })
+    const data = await res.json()
+    if (!res.ok) { addToast({ type: 'error', title: data.error }); return }
+    addToast({ type: 'success', title: 'Question supprimée.' })
+    fetchQ(filter)
+  }
+
+  async function denyDeleteRequest(id: string) {
+    const res = await fetch(`/api/admin/questions/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'cancel_delete' }),
+    })
+    const data = await res.json()
+    if (!res.ok) { addToast({ type: 'error', title: data.error }); return }
+    addToast({ type: 'success', title: 'Demande refusée.' })
+    fetchQ(filter)
+  }
+
+  const FILTERS: { key: GodQFilter; label: string }[] = [
+    { key: 'pending',         label: '⏳ En attente' },
+    { key: 'approved',        label: '✓ Approuvées' },
+    { key: 'all',             label: 'Toutes' },
+    { key: 'delete_requests', label: '🗑 Suppressions' },
+  ]
+
   return (
     <div className="space-y-4">
-      {/* Filter */}
-      <div className="flex gap-2">
-        {(['pending', 'active', 'all'] as const).map(f => (
-          <button key={f} onClick={() => setFilter(f)}
+      {/* Filter tabs */}
+      <div className="flex gap-2 flex-wrap">
+        {FILTERS.map(f => (
+          <button key={f.key} onClick={() => setFilter(f.key)}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-            style={filter === f
-              ? { background: 'rgba(212,168,67,0.15)', color: '#D4A843', border: '1px solid rgba(212,168,67,0.3)' }
+            style={filter === f.key
+              ? { background: f.key === 'delete_requests' ? 'rgba(255,77,106,0.15)' : 'rgba(212,168,67,0.15)',
+                  color: f.key === 'delete_requests' ? '#FF4D6A' : '#D4A843',
+                  border: `1px solid ${f.key === 'delete_requests' ? 'rgba(255,77,106,0.3)' : 'rgba(212,168,67,0.3)'}` }
               : { background: 'rgba(255,255,255,0.03)', color: '#6B7280', border: '1px solid rgba(255,255,255,0.06)' }
             }>
-            {f === 'pending' ? '⏳ En attente' : f === 'active' ? '✓ Actives' : 'Toutes'}
+            {f.label}
           </button>
         ))}
       </div>
@@ -912,47 +958,98 @@ function QuestionsApprovalTab({ addToast }: { addToast: AddToast }) {
       ) : questions.length === 0 ? (
         <div className="rpg-card p-10 text-center">
           <p className="text-gray-500">
-            {filter === 'pending' ? 'Aucune question en attente d\'approbation.' : 'Aucune question trouvée.'}
+            {filter === 'pending' ? 'Aucune question en attente.' :
+             filter === 'delete_requests' ? 'Aucune demande de suppression.' :
+             'Aucune question trouvée.'}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           {questions.map(q => (
-            <div key={q.id} className="rpg-card overflow-hidden">
-              <div className="p-4 flex items-start gap-3 cursor-pointer" onClick={() => setExpandedId(expandedId === q.id ? null : q.id)}>
-                <div className="mt-0.5">
+            <div key={q.id} className="rpg-card overflow-hidden"
+              style={q.delete_requested_by ? { borderColor: 'rgba(255,77,106,0.2)' } : {}}>
+
+              <div className="p-4 flex items-start gap-3">
+                {/* Expand toggle */}
+                <button className="mt-0.5 flex-shrink-0" onClick={() => setExpandedId(expandedId === q.id ? null : q.id)}>
                   {q.is_active
                     ? <span className="text-[#25C292] text-xs font-bold">✓</span>
                     : <span className="text-[#F59E0B] text-xs font-bold">⏳</span>}
-                </div>
-                <div className="flex-1 min-w-0">
+                </button>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedId(expandedId === q.id ? null : q.id)}>
                   <p className="text-white text-sm font-medium leading-snug">{q.question_text}</p>
-                  <div className="flex items-center gap-2 mt-1.5">
+                  <div className="flex flex-wrap items-center gap-2 mt-1.5">
                     {q.branches && (
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: `${q.branches.color}15`, color: q.branches.color }}>
+                      <span className="text-xs px-2 py-0.5 rounded-full"
+                        style={{ background: `${q.branches.color}15`, color: q.branches.color }}>
                         {q.branches.name}
                       </span>
                     )}
                     <span className="text-xs" style={{ color: DIFF_COLOR[q.difficulty] }}>{DIFF_LABEL[q.difficulty]}</span>
+                    {q.delete_requested_by && (
+                      <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                        style={{ background: 'rgba(255,77,106,0.12)', color: '#FF4D6A', border: '1px solid rgba(255,77,106,0.25)' }}>
+                        🗑 Suppression demandée
+                      </span>
+                    )}
                     <span className="text-gray-600 text-xs">{new Date(q.created_at).toLocaleDateString('fr-CA')}</span>
                   </div>
                 </div>
-                {!q.is_active && (
-                  <div className="flex gap-2 flex-shrink-0">
-                    <button onClick={e => { e.stopPropagation(); action(q.id, 'approve') }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                      style={{ background: 'rgba(37,194,146,0.15)', color: '#25C292', border: '1px solid rgba(37,194,146,0.3)' }}>
-                      ✓ Approuver
+
+                {/* Action buttons */}
+                <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
+                  {/* Approve/reject for pending */}
+                  {!q.is_active && filter !== 'delete_requests' && (
+                    <>
+                      <button onClick={() => approveReject(q.id, 'approve')}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                        style={{ background: 'rgba(37,194,146,0.15)', color: '#25C292', border: '1px solid rgba(37,194,146,0.3)' }}>
+                        ✓ Approuver
+                      </button>
+                      <button onClick={() => approveReject(q.id, 'reject')}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                        style={{ background: 'rgba(255,77,106,0.1)', color: '#FF4D6A', border: '1px solid rgba(255,77,106,0.2)' }}>
+                        ✗ Rejeter
+                      </button>
+                    </>
+                  )}
+
+                  {/* Delete request actions */}
+                  {q.delete_requested_by && (
+                    <>
+                      <button onClick={() => setDeletingId(q.id)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                        style={{ background: 'rgba(255,77,106,0.15)', color: '#FF4D6A', border: '1px solid rgba(255,77,106,0.3)' }}>
+                        <Trash2 size={11} /> Supprimer
+                      </button>
+                      <button onClick={() => denyDeleteRequest(q.id)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
+                        style={{ background: 'rgba(255,255,255,0.05)', color: '#9CA3AF', border: '1px solid rgba(255,255,255,0.1)' }}>
+                        Refuser
+                      </button>
+                    </>
+                  )}
+
+                  {/* Edit button — always visible */}
+                  <button onClick={() => setEditing(q)}
+                    className="p-1.5 rounded-lg transition-all"
+                    style={{ color: '#D4A843', background: 'rgba(212,168,67,0.08)' }} title="Modifier">
+                    <Pencil size={14} />
+                  </button>
+
+                  {/* Direct delete — always visible */}
+                  {!q.delete_requested_by && (
+                    <button onClick={() => setDeletingId(q.id)}
+                      className="p-1.5 rounded-lg text-[#FF4D6A] hover:bg-[#FF4D6A]/10 transition-all" title="Supprimer directement">
+                      <Trash2 size={14} />
                     </button>
-                    <button onClick={e => { e.stopPropagation(); action(q.id, 'reject') }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                      style={{ background: 'rgba(255,77,106,0.15)', color: '#FF4D6A', border: '1px solid rgba(255,77,106,0.3)' }}>
-                      ✗ Rejeter
-                    </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
+              {/* Expanded answers */}
               {expandedId === q.id && (
                 <div className="px-4 pb-4 border-t border-white/5 animate-slide-up">
                   <div className="space-y-1.5 mt-3">
@@ -964,6 +1061,12 @@ function QuestionsApprovalTab({ addToast }: { addToast: AddToast }) {
                         {a.is_correct && <span className="ml-auto text-[#25C292] text-xs">✓ Correct</span>}
                       </div>
                     ))}
+                    {q.explanation && (
+                      <div className="mt-2 px-3 py-2 rounded-lg text-xs text-gray-400"
+                        style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        💡 {q.explanation}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -971,6 +1074,185 @@ function QuestionsApprovalTab({ addToast }: { addToast: AddToast }) {
           ))}
         </div>
       )}
+
+      {/* Delete confirmation dialog */}
+      {deletingId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.8)' }}>
+          <div className="rpg-card p-6 max-w-sm w-full text-center space-y-4">
+            <div className="text-4xl">⚠️</div>
+            <p className="text-white font-semibold">Supprimer cette question ?</p>
+            <p className="text-gray-400 text-sm">Cette action est irréversible.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeletingId(null)}
+                className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"
+                style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
+                Annuler
+              </button>
+              <button onClick={() => directDelete(deletingId)}
+                className="flex-1 py-2.5 rounded-lg text-sm font-semibold"
+                style={{ background: 'rgba(255,77,106,0.2)', color: '#FF4D6A', border: '1px solid rgba(255,77,106,0.3)' }}>
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {editing && (
+        <EditQuestionModal
+          question={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => { fetchQ(filter); setEditing(null) }}
+          addToast={addToast}
+        />
+      )}
+    </div>
+  )
+}
+
+function EditQuestionModal({ question, onClose, onSaved, addToast }: {
+  question: GodQuestion
+  onClose: () => void
+  onSaved: () => void
+  addToast: AddToast
+}) {
+  const DIFF_LABEL = ['', 'Débutant', 'Intermédiaire', 'Expert']
+  const DIFF_COLOR = ['', '#25C292', '#F59E0B', '#FF4D6A']
+
+  const [text, setTextVal]         = useState(question.question_text)
+  const [explanation, setExplanation] = useState(question.explanation ?? '')
+  const [tip, setTip]              = useState(question.tip ?? '')
+  const [difficulty, setDifficulty] = useState<1 | 2 | 3>(question.difficulty as 1 | 2 | 3 ?? 1)
+  const [answers, setAnswers]      = useState(
+    question.answers.map(a => ({ answer_text: a.answer_text, is_correct: a.is_correct }))
+  )
+  const [saving, setSaving]        = useState(false)
+
+  function setCorrect(idx: number) {
+    setAnswers(prev => prev.map((a, i) => ({ ...a, is_correct: i === idx })))
+  }
+
+  async function save() {
+    if (!text.trim() || !explanation.trim()) {
+      addToast({ type: 'error', title: 'Question et explication requises.' }); return
+    }
+    const filled = answers.filter(a => a.answer_text.trim())
+    if (filled.length < 2) {
+      addToast({ type: 'error', title: 'Au moins 2 réponses requises.' }); return
+    }
+    setSaving(true)
+    const res = await fetch(`/api/admin/questions/${question.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'edit',
+        question_text: text.trim(),
+        explanation: explanation.trim(),
+        tip: tip.trim() || null,
+        difficulty,
+        answers: filled,
+      }),
+    })
+    const data = await res.json()
+    setSaving(false)
+    if (!res.ok) { addToast({ type: 'error', title: data.error }); return }
+    addToast({ type: 'success', title: 'Question modifiée.' })
+    onSaved()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.85)' }}
+      onClick={onClose}>
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl p-6 space-y-4"
+        style={{ background: '#111628', border: '1px solid rgba(255,255,255,0.1)' }}
+        onClick={e => e.stopPropagation()}>
+
+        <div className="flex items-center justify-between">
+          <h3 className="font-cinzel font-bold text-white text-lg">Modifier la question</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-all">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Question text */}
+        <div>
+          <label className="text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Question *</label>
+          <textarea value={text} onChange={e => setTextVal(e.target.value)} rows={3}
+            className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm resize-none focus:outline-none focus:border-[#D4A843]/50 transition-colors" />
+        </div>
+
+        {/* Difficulty */}
+        <div>
+          <label className="text-gray-400 text-xs uppercase tracking-wider block mb-2">Difficulté *</label>
+          <div className="flex gap-2">
+            {([1, 2, 3] as const).map(d => (
+              <button key={d} type="button" onClick={() => setDifficulty(d)}
+                className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
+                style={difficulty === d
+                  ? { background: `${DIFF_COLOR[d]}20`, border: `1px solid ${DIFF_COLOR[d]}50`, color: DIFF_COLOR[d] }
+                  : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#6B7280' }
+                }>
+                {DIFF_LABEL[d]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Answers */}
+        <div>
+          <label className="text-gray-400 text-xs uppercase tracking-wider block mb-2">
+            Réponses * <span className="normal-case text-gray-600">(✓ = bonne réponse)</span>
+          </label>
+          <div className="space-y-2">
+            {answers.map((a, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <button type="button" onClick={() => setCorrect(i)}
+                  className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-sm transition-all border"
+                  style={a.is_correct
+                    ? { background: 'rgba(37,194,146,0.2)', borderColor: '#25C292', color: '#25C292' }
+                    : { background: 'transparent', borderColor: 'rgba(255,255,255,0.12)', color: '#4B5563' }
+                  }>✓</button>
+                <input value={a.answer_text}
+                  onChange={e => setAnswers(prev => prev.map((ans, j) => j === i ? { ...ans, answer_text: e.target.value } : ans))}
+                  className="flex-1 bg-[#080A12] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#D4A843]/50 transition-colors"
+                  placeholder={`Réponse ${i + 1}`} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Explanation */}
+        <div>
+          <label className="text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Explication *</label>
+          <textarea value={explanation} onChange={e => setExplanation(e.target.value)} rows={3}
+            className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm resize-none focus:outline-none focus:border-[#D4A843]/50 transition-colors" />
+        </div>
+
+        {/* Tip */}
+        <div>
+          <label className="text-gray-400 text-xs uppercase tracking-wider block mb-1.5">
+            Astuce 💡 <span className="normal-case text-gray-600">(optionnel)</span>
+          </label>
+          <input value={tip} onChange={e => setTip(e.target.value)}
+            className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#D4A843]/50 transition-colors"
+            placeholder="Moyen mnémotechnique ou conseil..." />
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-3 pt-1">
+          <button onClick={onClose}
+            className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"
+            style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
+            Annuler
+          </button>
+          <button onClick={save} disabled={saving}
+            className="flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-40"
+            style={{ background: 'linear-gradient(135deg, #D4A843, #B8892A)', color: '#080A12' }}>
+            {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

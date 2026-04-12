@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { verifyAccessToken } from '@/lib/auth'
 import { isGod, isModerator } from '@/lib/permissions'
 
-// PATCH — approve / reject / toggle
+// PATCH — approve / reject / toggle / request_delete / cancel_delete / edit
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -16,7 +16,14 @@ export async function PATCH(
   }
 
   const { id } = await params
-  let body: { action?: 'approve' | 'reject' | 'toggle' }
+  let body: {
+    action?: 'approve' | 'reject' | 'toggle' | 'request_delete' | 'cancel_delete' | 'edit'
+    question_text?: string
+    explanation?: string
+    tip?: string | null
+    difficulty?: 1 | 2 | 3
+    answers?: { answer_text: string; is_correct: boolean }[]
+  }
 
   try {
     body = await request.json()
@@ -26,6 +33,7 @@ export async function PATCH(
 
   const { action } = body
 
+  // ── Approve / Reject ──────────────────────────────────────────
   if (action === 'approve' || action === 'reject') {
     const isApprove = action === 'approve'
     const { error } = await supabaseAdmin
@@ -49,6 +57,7 @@ export async function PATCH(
     return NextResponse.json({ message: isApprove ? 'Question approuvée.' : 'Question rejetée.' })
   }
 
+  // ── Toggle active ─────────────────────────────────────────────
   if (action === 'toggle') {
     const { data: q } = await supabaseAdmin
       .from('questions')
@@ -70,6 +79,102 @@ export async function PATCH(
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     return NextResponse.json({ is_active: nowActive })
+  }
+
+  // ── Request deletion (moderator+) ─────────────────────────────
+  if (action === 'request_delete') {
+    const { error } = await supabaseAdmin
+      .from('questions')
+      .update({
+        delete_requested_by: payload.sub,
+        delete_requested_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    await supabaseAdmin.from('admin_logs').insert({
+      admin_id: payload.sub,
+      action: 'request_delete_question',
+      details: { question_id: id },
+    })
+
+    return NextResponse.json({ message: 'Demande de suppression envoyée au God Panel.' })
+  }
+
+  // ── Cancel deletion request ───────────────────────────────────
+  if (action === 'cancel_delete') {
+    // Non-god: can only cancel their own request
+    if (!isGod(payload.role)) {
+      const { data: q } = await supabaseAdmin
+        .from('questions')
+        .select('delete_requested_by')
+        .eq('id', id)
+        .single()
+      if (!q) return NextResponse.json({ error: 'Question introuvable.' }, { status: 404 })
+      if (q.delete_requested_by !== payload.sub) {
+        return NextResponse.json({ error: 'Vous ne pouvez annuler que vos propres demandes.' }, { status: 403 })
+      }
+    }
+
+    const { error } = await supabaseAdmin
+      .from('questions')
+      .update({ delete_requested_by: null, delete_requested_at: null })
+      .eq('id', id)
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    return NextResponse.json({ message: 'Demande de suppression annulée.' })
+  }
+
+  // ── Edit question (god only) ──────────────────────────────────
+  if (action === 'edit') {
+    if (!isGod(payload.role)) {
+      return NextResponse.json({ error: 'Seul le GOD peut modifier les questions.' }, { status: 403 })
+    }
+
+    const { question_text, explanation, tip, difficulty, answers } = body
+
+    if (!question_text?.trim() || !explanation?.trim()) {
+      return NextResponse.json({ error: 'Question et explication requises.' }, { status: 400 })
+    }
+
+    const { error: updateErr } = await supabaseAdmin
+      .from('questions')
+      .update({
+        question_text: question_text.trim(),
+        explanation: explanation.trim(),
+        tip: tip?.trim() || null,
+        difficulty,
+      })
+      .eq('id', id)
+
+    if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
+
+    // Replace answers if provided
+    if (answers && answers.length >= 2) {
+      const filled = answers.filter(a => a.answer_text.trim())
+      if (filled.length < 2) {
+        return NextResponse.json({ error: 'Au moins 2 réponses requises.' }, { status: 400 })
+      }
+      await supabaseAdmin.from('answers').delete().eq('question_id', id)
+      const rows = filled.map((a, i) => ({
+        question_id: id,
+        answer_text: a.answer_text.trim(),
+        is_correct: a.is_correct,
+        order_index: i,
+      }))
+      const { error: ansErr } = await supabaseAdmin.from('answers').insert(rows)
+      if (ansErr) return NextResponse.json({ error: ansErr.message }, { status: 500 })
+    }
+
+    await supabaseAdmin.from('admin_logs').insert({
+      admin_id: payload.sub,
+      action: 'edit_question',
+      details: { question_id: id },
+    })
+
+    return NextResponse.json({ message: 'Question modifiée.' })
   }
 
   return NextResponse.json({ error: 'Action inconnue.' }, { status: 400 })

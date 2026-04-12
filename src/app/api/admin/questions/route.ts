@@ -22,11 +22,14 @@ export async function GET(request: NextRequest) {
   const perPage       = 20
   const offset        = (page - 1) * perPage
 
+  const deleteRequested = searchParams.get('delete_requested') === 'true'
+
   let query = supabaseAdmin
     .from('questions')
     .select(
       `id, question_text, question_type, difficulty, status, category_id,
        branch_id, is_active, created_by, created_at, game_types,
+       delete_requested_by, delete_requested_at, explanation, tip,
        answers(id, answer_text, is_correct, order_index),
        branches(name, color),
        question_categories(name, icon, color)`,
@@ -35,7 +38,9 @@ export async function GET(request: NextRequest) {
     .order('created_at', { ascending: false })
     .range(offset, offset + perPage - 1)
 
-  if (statusFilter && statusFilter !== 'all') {
+  if (deleteRequested) {
+    query = query.not('delete_requested_by', 'is', null)
+  } else if (statusFilter && statusFilter !== 'all') {
     query = query.eq('status', statusFilter)
   }
   if (branchId) {

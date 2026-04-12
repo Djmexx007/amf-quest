@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Plus, BookOpen, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight,
-  Trash2, EyeOff, Tag, Filter,
+  Trash2, EyeOff, Tag, Filter, X,
 } from 'lucide-react'
 import { useUIStore } from '@/stores/uiStore'
 import { useAuth } from '@/hooks/useAuth'
@@ -21,6 +21,7 @@ interface QuestionRow {
   is_active: boolean
   game_types: string[]
   created_at: string
+  delete_requested_by: string | null
   branches: { name: string; color: string } | null
   question_categories: { name: string; icon: string | null; color: string | null } | null
   answers: { id: string; answer_text: string; is_correct: boolean }[]
@@ -237,12 +238,28 @@ export default function AdminQuestionsPage() {
     fetchQuestions()
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Supprimer cette question définitivement ?')) return
-    const res = await fetch(`/api/admin/questions/${id}`, { method: 'DELETE' })
+  async function handleRequestDelete(id: string) {
+    if (!confirm('Envoyer une demande de suppression au God Panel ?')) return
+    const res = await fetch(`/api/admin/questions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'request_delete' }),
+    })
     const data = await res.json()
     if (!res.ok) { addToast({ type: 'error', title: data.error }); return }
-    addToast({ type: 'success', title: 'Question supprimée.' })
+    addToast({ type: 'success', title: 'Demande de suppression envoyée.' })
+    fetchQuestions()
+  }
+
+  async function handleCancelDeleteRequest(id: string) {
+    const res = await fetch(`/api/admin/questions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'cancel_delete' }),
+    })
+    const data = await res.json()
+    if (!res.ok) { addToast({ type: 'error', title: data.error }); return }
+    addToast({ type: 'success', title: 'Demande annulée.' })
     fetchQuestions()
   }
 
@@ -348,6 +365,12 @@ export default function AdminQuestionsPage() {
                               {q.question_categories.icon} {q.question_categories.name}
                             </span>
                           )}
+                          {q.delete_requested_by && (
+                            <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                              style={{ background: 'rgba(255,77,106,0.12)', color: '#FF4D6A', border: '1px solid rgba(255,77,106,0.25)' }}>
+                              🗑 Suppression demandée
+                            </span>
+                          )}
                           <span className="text-xs text-gray-600">
                             {new Date(q.created_at).toLocaleDateString('fr-CA')}
                           </span>
@@ -380,9 +403,16 @@ export default function AdminQuestionsPage() {
                               <CheckCircle size={15} />
                             </button>
                           )}
-                          {user?.role === 'god' && (
-                            <button onClick={() => handleDelete(q.id)}
-                              className="p-1.5 rounded-lg text-[#FF4D6A] hover:bg-[#FF4D6A]/10 transition-all" title="Supprimer">
+                          {/* Delete request — replaces direct delete */}
+                          {q.delete_requested_by ? (
+                            <button onClick={() => handleCancelDeleteRequest(q.id)}
+                              className="p-1.5 rounded-lg transition-all" title="Annuler la demande de suppression"
+                              style={{ color: '#F59E0B', background: 'rgba(245,158,11,0.08)' }}>
+                              <X size={15} />
+                            </button>
+                          ) : (
+                            <button onClick={() => handleRequestDelete(q.id)}
+                              className="p-1.5 rounded-lg text-[#FF4D6A] hover:bg-[#FF4D6A]/10 transition-all" title="Demander la suppression">
                               <Trash2 size={15} />
                             </button>
                           )}
