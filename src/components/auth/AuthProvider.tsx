@@ -18,7 +18,7 @@ interface Props {
 export default function AuthProvider({ children, requiredRole = 'user' }: Props) {
   const { user, isLoading } = useAuth()
   const router = useRouter()
-  const { setBgTheme, setEquippedTitle } = useUIStore()
+  const { setBgTheme, setEquippedTitle, setSoundOnCorrect, setSoundOnWrong } = useUIStore()
 
   useEffect(() => {
     if (isLoading) return
@@ -42,10 +42,14 @@ export default function AuthProvider({ children, requiredRole = 'user' }: Props)
       .then(r => r.json())
       .then((data: { equipped_items?: { item_type: string; effect: Record<string, unknown> }[] }) => {
         const items = data.equipped_items ?? []
-        const cosmetic = items.find(i => i.item_type === 'cosmetic' && i.effect?.background)
-        setBgTheme(cosmetic ? String(cosmetic.effect.background) : null)
-        const titleItem = items.find(i => i.item_type === 'title' && i.effect?.title)
-        setEquippedTitle(titleItem ? String(titleItem.effect.title) : null)
+        const cosmetic   = items.find(i => i.item_type === 'cosmetic' && i.effect?.background)
+        const titleItem  = items.find(i => i.item_type === 'title'    && i.effect?.title)
+        const correctSnd = items.find(i => i.item_type === 'sound'    && i.effect?.trigger === 'correct')
+        const wrongSnd   = items.find(i => i.item_type === 'sound'    && i.effect?.trigger === 'wrong')
+        setBgTheme(cosmetic  ? String(cosmetic.effect.background) : null)
+        setEquippedTitle(titleItem  ? String(titleItem.effect.title)    : null)
+        setSoundOnCorrect(correctSnd ? String(correctSnd.effect.sound)  : null)
+        setSoundOnWrong(wrongSnd     ? String(wrongSnd.effect.sound)    : null)
       })
       .catch(() => {})
   }, [user?.id, user?.selected_branch_id])

@@ -71,8 +71,9 @@ export async function POST(request: NextRequest) {
   const consumedBoostIds: string[] = []
 
   for (const inv of equippedInventory ?? []) {
-    const item = (inv.shop_items as unknown) as { item_type: string; effect: Record<string, unknown>; is_consumable: boolean }
-    if (item.item_type !== 'boost') continue
+    const raw = inv.shop_items
+    const item = (Array.isArray(raw) ? raw[0] : raw) as { item_type: string; effect: Record<string, unknown>; is_consumable: boolean } | null
+    if (!item || item.item_type !== 'boost') continue
     let applied = false
     if (item.effect.xp_multiplier) { boostXPMult *= Number(item.effect.xp_multiplier); applied = true }
     if (item.effect.coins_multiplier) { boostCoinsMult *= Number(item.effect.coins_multiplier); applied = true }

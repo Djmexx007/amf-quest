@@ -24,8 +24,9 @@ export async function POST(request: NextRequest) {
     .eq('is_equipped', true)
 
   const target = (inventory ?? []).find(inv => {
-    const item = (inv.shop_items as unknown) as { effect: Record<string, unknown>; is_consumable: boolean }
-    return item.is_consumable && item.effect?.[effect_key]
+    const raw = inv.shop_items
+    const item = (Array.isArray(raw) ? raw[0] : raw) as { effect: Record<string, unknown>; is_consumable: boolean } | null
+    return !!item?.is_consumable && !!item.effect?.[effect_key]
   })
 
   if (!target) return NextResponse.json({ ok: false, message: 'Boost introuvable.' })
