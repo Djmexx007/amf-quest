@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import type { QuestionWithAnswers } from '@/types'
+import type { Question as QuestionWithAnswers } from '@/types'
 import AchievementUnlockToast from '@/components/ui/AchievementUnlockToast'
 
 // ============================================================
@@ -1077,7 +1077,7 @@ export default function PlatformerPage() {
 
     const qDiff = rs.round <= 2 ? 1 : rs.round <= 5 ? 2 : 3
     const level = genLevel(rs.round, rs.diff, rs.enemySlowMult)
-    const data  = await fetch(`/api/game/questions?game=quiz&count=${level.questionCount}&difficulty=${qDiff}`)
+    const data  = await fetch(`/api/game/questions?count=${level.questionCount}`)
       .then(r => r.json()).catch(() => ({ questions: [] }))
     qsRef.current = data.questions ?? []
 
@@ -1088,10 +1088,10 @@ export default function PlatformerPage() {
   }
 
   // ── Answer handling ────────────────────────────────────────
-  function handleAnswer(answerId: string) {
+  function handleAnswer(answer: string) {
     if (!activeQ || ansResult) return
-    const correct = activeQ.answers.find(a => a.is_correct)?.id === answerId
-    setSelAnswer(answerId)
+    const correct = answer === activeQ.correct_answer
+    setSelAnswer(answer)
     setAnsResult(correct ? 'correct' : 'wrong')
 
     const gs = gsRef.current, rs = rsRef.current
@@ -1460,20 +1460,20 @@ export default function PlatformerPage() {
                 Question AMF
               </p>
               <p className="text-white font-semibold text-sm text-center mb-5 leading-relaxed">
-                {activeQ.question_text}
+                {activeQ.question}
               </p>
               <div className="space-y-2">
-                {activeQ.answers.map(a => {
+                {activeQ.answers.map((a, i) => {
                   let bg = 'rgba(255,255,255,0.05)', border = 'rgba(255,255,255,0.1)', color = '#E5E7EB'
                   if (selAnswer) {
-                    if (a.is_correct)          { bg = 'rgba(37,194,146,0.15)';  border = '#25C292'; color = '#25C292' }
-                    else if (a.id === selAnswer){ bg = 'rgba(255,77,106,0.15)';  border = '#FF4D6A'; color = '#FF4D6A' }
+                    if (a === activeQ.correct_answer)  { bg = 'rgba(37,194,146,0.15)';  border = '#25C292'; color = '#25C292' }
+                    else if (a === selAnswer)           { bg = 'rgba(255,77,106,0.15)';  border = '#FF4D6A'; color = '#FF4D6A' }
                   }
                   return (
-                    <button key={a.id} onClick={() => handleAnswer(a.id)} disabled={!!selAnswer}
+                    <button key={i} onClick={() => handleAnswer(a)} disabled={!!selAnswer}
                       className="w-full text-left px-4 py-3 rounded-lg text-sm disabled:cursor-not-allowed transition-all"
                       style={{ background: bg, border: `1px solid ${border}`, color }}>
-                      {a.answer_text}
+                      {a}
                     </button>
                   )
                 })}
@@ -1483,11 +1483,8 @@ export default function PlatformerPage() {
                   <p className="text-sm mb-1" style={{ color: ansResult === 'correct' ? '#25C292' : '#FF4D6A' }}>
                     {ansResult === 'correct'
                       ? `✓ Correct ! +${Math.round(50 * (rsRef.current?.scoreMult ?? 1))} pts`
-                      : '✗ Incorrect — −1 HP !'}
+                      : `✗ Incorrect — −1 HP ! (${activeQ.correct_answer})`}
                   </p>
-                  {activeQ.explanation && (
-                    <p className="text-gray-400 text-xs mt-1">{activeQ.explanation}</p>
-                  )}
                   <button onClick={closeQuestion} className="mt-3 px-6 py-2 rounded-lg text-sm font-semibold"
                     style={{ background: 'linear-gradient(135deg, #D4A843, #B8892A)', color: '#080A12' }}>
                     Continuer →

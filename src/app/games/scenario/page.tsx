@@ -5,8 +5,7 @@ import GameShell from '@/components/games/GameShell'
 import ResultScreen from '@/components/games/ResultScreen'
 import AchievementUnlockToast from '@/components/ui/AchievementUnlockToast'
 
-interface Answer { id: string; answer_text: string; is_correct: boolean }
-interface Question { id: string; question_text: string; context_text: string | null; explanation: string; tip: string | null; answers: Answer[] }
+interface Question { id: string; question: string; context: string | null; answers: string[]; correct_answer: string }
 type Phase = 'playing' | 'answer' | 'result'
 
 export default function ScenarioPage() {
@@ -14,7 +13,7 @@ export default function ScenarioPage() {
   const [questions, setQuestions] = useState<Question[]>([])
   const [qIndex, setQIndex] = useState(0)
   const [correct, setCorrect] = useState(0)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
   const [branchColor, setBranchColor] = useState('#D4A843')
   const [result, setResult] = useState<{ xp: number; coins: number; levelUp: boolean; breakdown?: import('@/lib/xp-calculator').BonusBreakdown; rankUp?: { name: string; bonusCoins: number; bonusXP: number } | null } | null>(null)
   const [unlockedAchievements, setUnlockedAchievements] = useState<{ slug: string; title: string; xp: number; coins: number }[]>([])
@@ -23,7 +22,7 @@ export default function ScenarioPage() {
   useEffect(() => {
     Promise.all([
       fetch('/api/user/character').then(r => r.json()),
-      fetch('/api/game/questions?game=scenario&count=5').then(r => r.json()),
+      fetch('/api/game/questions?scenario=true&count=5').then(r => r.json()),
     ]).then(([charData, qData]) => {
       if (charData.branch?.color) setBranchColor(charData.branch.color)
       if (qData.questions) setQuestions(qData.questions)
@@ -31,9 +30,9 @@ export default function ScenarioPage() {
     })
   }, [])
 
-  function handleAnswer(answer: Answer) {
-    setSelectedId(answer.id)
-    if (answer.is_correct) setCorrect(c => c + 1)
+  function handleAnswer(answer: string) {
+    setSelectedAnswer(answer)
+    if (answer === questions[qIndex].correct_answer) setCorrect(c => c + 1)
     setPhase('answer')
   }
 
@@ -42,7 +41,7 @@ export default function ScenarioPage() {
       submitResult()
     } else {
       setQIndex(i => i + 1)
-      setSelectedId(null)
+      setSelectedAnswer(null)
       setPhase('playing')
     }
   }
@@ -82,7 +81,7 @@ export default function ScenarioPage() {
         xpEarned={result.xp} coinsEarned={result.coins} levelUp={result.levelUp}
         bonusBreakdown={result.breakdown} rankUpReward={result.rankUp}
         branchColor={branchColor}
-        onReplay={() => { setQIndex(0); setCorrect(0); setSelectedId(null); setResult(null); setPhase('playing') }}
+        onReplay={() => { setQIndex(0); setCorrect(0); setSelectedAnswer(null); setResult(null); setPhase('playing') }}
         gameLabel="Scénario Client" />
       <AchievementUnlockToast achievements={unlockedAchievements} onDone={() => setUnlockedAchievements([])} />
     </GameShell>
@@ -97,24 +96,24 @@ export default function ScenarioPage() {
         </div>
 
         {/* Client dossier */}
-        {q.context_text && (
+        {q.context && (
           <div className="rpg-card p-5 mb-4 border-l-4" style={{ borderLeftColor: branchColor }}>
             <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">📋 Dossier client</p>
-            <p className="text-gray-200 text-sm leading-relaxed whitespace-pre-line">{q.context_text}</p>
+            <p className="text-gray-200 text-sm leading-relaxed whitespace-pre-line">{q.context}</p>
           </div>
         )}
 
         {/* Question */}
         <div className="rpg-card p-5 mb-5">
           <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">💬 Situation</p>
-          <p className="text-white font-medium leading-relaxed">{q.question_text}</p>
+          <p className="text-white font-medium leading-relaxed">{q.question}</p>
         </div>
 
         {/* Answers */}
         <div className="space-y-3 mb-5">
           {q.answers.map((a, i) => {
-            const isSelected = selectedId === a.id
-            const isCorrect = a.is_correct
+            const isSelected = selectedAnswer === a
+            const isCorrect = a === q.correct_answer
             const revealed = phase === 'answer'
             const state = revealed
               ? isCorrect ? 'correct' : isSelected ? 'wrong' : 'dim'
@@ -127,24 +126,25 @@ export default function ScenarioPage() {
             }[state]
 
             return (
-              <button key={a.id} onClick={() => phase === 'playing' && handleAnswer(a)} disabled={phase !== 'playing'}
+              <button key={i} onClick={() => phase === 'playing' && handleAnswer(a)} disabled={phase !== 'playing'}
                 className="w-full text-left px-5 py-4 rounded-xl transition-all duration-200 disabled:cursor-default"
                 style={{ background: colors.bg, border: `1px solid ${colors.border}`, color: colors.text }}>
                 <span className="text-xs mr-3 opacity-50">{String.fromCharCode(65 + i)}.</span>
-                {a.answer_text}
+                {a}
               </button>
             )
           })}
         </div>
 
-        {/* Explanation */}
+        {/* Feedback */}
         {phase === 'answer' && (
-          <div className="rpg-card p-5 mb-5 animate-slide-up" style={{ borderColor: selectedId && q.answers.find(a=>a.id===selectedId)?.is_correct ? '#25C29250' : '#FF4D6A50' }}>
+          <div className="rpg-card p-5 mb-5 animate-slide-up" style={{ borderColor: selectedAnswer === q.correct_answer ? '#25C29250' : '#FF4D6A50' }}>
             <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">
-              {selectedId && q.answers.find(a=>a.id===selectedId)?.is_correct ? '✓ Bonne réponse' : '✗ Mauvaise réponse'}
+              {selectedAnswer === q.correct_answer ? '✓ Bonne réponse' : '✗ Mauvaise réponse'}
             </p>
-            <p className="text-gray-300 text-sm leading-relaxed">{q.explanation}</p>
-            {q.tip && <p className="text-[#D4A843] text-xs mt-2">💡 {q.tip}</p>}
+            {selectedAnswer !== q.correct_answer && (
+              <p className="text-gray-400 text-xs mb-2">Bonne réponse : <span className="text-green-400">{q.correct_answer}</span></p>
+            )}
             <button onClick={next} className="mt-4 px-6 py-2 rounded-lg font-semibold text-sm transition-all"
               style={{ background: `${branchColor}20`, border: `1px solid ${branchColor}40`, color: branchColor }}>
               {qIndex + 1 >= questions.length ? 'Voir les résultats →' : 'Scénario suivant →'}

@@ -855,58 +855,43 @@ function ChestPricingSection({ addToast }: { addToast: AddToast }) {
   )
 }
 
-// ── Tab: Approbation questions ────────────────────────────────
+// ── Tab: Questions ────────────────────────────────────────────
 interface GodQuestion {
   id: string
-  question_text: string
-  question_type: string
-  difficulty: number
-  is_active: boolean
+  question: string
+  context: string | null
+  answers: string[]
+  correct_answer: string
+  branch: string
+  category: string
+  is_scenario: boolean
   created_at: string
-  explanation: string | null
-  tip: string | null
-  delete_requested_by: string | null
-  delete_requested_at: string | null
-  branches: { name: string; color: string } | null
-  answers: { id: string; answer_text: string; is_correct: boolean }[]
+  times_used: number
 }
-
-type GodQFilter = 'pending' | 'approved' | 'all' | 'delete_requests'
 
 function QuestionsApprovalTab({ addToast }: { addToast: AddToast }) {
   const [questions, setQuestions] = useState<GodQuestion[]>([])
-  const [filter, setFilter]       = useState<GodQFilter>('pending')
+  const [branchFilter, setBranchFilter] = useState('')
+  const [page, setPage]           = useState(1)
+  const [total, setTotal]         = useState(0)
   const [loading, setLoading]     = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [editing, setEditing]       = useState<GodQuestion | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  const DIFF_LABEL = ['', 'Débutant', 'Intermédiaire', 'Expert']
-  const DIFF_COLOR = ['', '#25C292', '#F59E0B', '#FF4D6A']
+  const perPage = 20
 
-  const fetchQ = useCallback((f: GodQFilter) => {
+  const fetchQ = useCallback(() => {
     setLoading(true)
-    const url = f === 'delete_requests'
-      ? '/api/admin/questions?delete_requested=true&page=1'
-      : `/api/admin/questions?status=${f}&page=1`
-    fetch(url)
+    const params = new URLSearchParams({ page: String(page) })
+    if (branchFilter) params.set('branch', branchFilter)
+    fetch(`/api/admin/questions?${params}`)
       .then(r => r.json())
-      .then(d => setQuestions(d.questions ?? []))
+      .then(d => { setQuestions(d.questions ?? []); setTotal(d.total ?? 0) })
       .finally(() => setLoading(false))
-  }, [])
+  }, [page, branchFilter])
 
-  useEffect(() => { fetchQ(filter) }, [filter, fetchQ])
-
-  async function approveReject(id: string, act: 'approve' | 'reject') {
-    const res = await fetch(`/api/admin/questions/${id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: act }),
-    })
-    const data = await res.json()
-    if (!res.ok) { addToast({ type: 'error', title: data.error }); return }
-    addToast({ type: 'success', title: data.message })
-    fetchQ(filter)
-  }
+  useEffect(() => { fetchQ() }, [fetchQ])
 
   async function directDelete(id: string) {
     setDeletingId(null)
@@ -914,159 +899,91 @@ function QuestionsApprovalTab({ addToast }: { addToast: AddToast }) {
     const data = await res.json()
     if (!res.ok) { addToast({ type: 'error', title: data.error }); return }
     addToast({ type: 'success', title: 'Question supprimée.' })
-    fetchQ(filter)
+    fetchQ()
   }
 
-  async function denyDeleteRequest(id: string) {
-    const res = await fetch(`/api/admin/questions/${id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'cancel_delete' }),
-    })
-    const data = await res.json()
-    if (!res.ok) { addToast({ type: 'error', title: data.error }); return }
-    addToast({ type: 'success', title: 'Demande refusée.' })
-    fetchQ(filter)
-  }
-
-  const FILTERS: { key: GodQFilter; label: string }[] = [
-    { key: 'pending',         label: '⏳ En attente' },
-    { key: 'approved',        label: '✓ Approuvées' },
-    { key: 'all',             label: 'Toutes' },
-    { key: 'delete_requests', label: '🗑 Suppressions' },
-  ]
+  const totalPages = Math.max(1, Math.ceil(total / perPage))
 
   return (
     <div className="space-y-4">
-      {/* Filter tabs */}
+      {/* Filtres */}
       <div className="flex gap-2 flex-wrap">
-        {FILTERS.map(f => (
-          <button key={f.key} onClick={() => setFilter(f.key)}
+        {(['', 'assurance', 'fonds-mutuel'] as const).map(b => (
+          <button key={b} onClick={() => { setBranchFilter(b); setPage(1) }}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
-            style={filter === f.key
-              ? { background: f.key === 'delete_requests' ? 'rgba(255,77,106,0.15)' : 'rgba(212,168,67,0.15)',
-                  color: f.key === 'delete_requests' ? '#FF4D6A' : '#D4A843',
-                  border: `1px solid ${f.key === 'delete_requests' ? 'rgba(255,77,106,0.3)' : 'rgba(212,168,67,0.3)'}` }
+            style={branchFilter === b
+              ? { background: 'rgba(212,168,67,0.15)', color: '#D4A843', border: '1px solid rgba(212,168,67,0.3)' }
               : { background: 'rgba(255,255,255,0.03)', color: '#6B7280', border: '1px solid rgba(255,255,255,0.06)' }
             }>
-            {f.label}
+            {b === '' ? 'Toutes' : b}
           </button>
         ))}
+        <span className="ml-auto text-gray-500 text-xs self-center">{total} question{total > 1 ? 's' : ''}</span>
       </div>
 
       {loading ? (
         <div className="rpg-card p-10 text-center text-gray-500 animate-pulse">Chargement...</div>
       ) : questions.length === 0 ? (
         <div className="rpg-card p-10 text-center">
-          <p className="text-gray-500">
-            {filter === 'pending' ? 'Aucune question en attente.' :
-             filter === 'delete_requests' ? 'Aucune demande de suppression.' :
-             'Aucune question trouvée.'}
-          </p>
+          <p className="text-gray-500">Aucune question trouvée.</p>
         </div>
       ) : (
         <div className="space-y-3">
           {questions.map(q => (
-            <div key={q.id} className="rpg-card overflow-hidden"
-              style={q.delete_requested_by ? { borderColor: 'rgba(255,77,106,0.2)' } : {}}>
-
+            <div key={q.id} className="rpg-card overflow-hidden">
               <div className="p-4 flex items-start gap-3">
-                {/* Expand toggle */}
-                <button className="mt-0.5 flex-shrink-0" onClick={() => setExpandedId(expandedId === q.id ? null : q.id)}>
-                  {q.is_active
-                    ? <span className="text-[#25C292] text-xs font-bold">✓</span>
-                    : <span className="text-[#F59E0B] text-xs font-bold">⏳</span>}
-                </button>
-
-                {/* Content */}
                 <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedId(expandedId === q.id ? null : q.id)}>
-                  <p className="text-white text-sm font-medium leading-snug">{q.question_text}</p>
+                  <p className="text-white text-sm font-medium leading-snug">{q.question}</p>
                   <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                    {q.branches && (
+                    <span className="text-xs px-2 py-0.5 rounded-full"
+                      style={{ background: 'rgba(212,168,67,0.1)', color: '#D4A843', border: '1px solid rgba(212,168,67,0.2)' }}>
+                      {q.branch}
+                    </span>
+                    <span className="text-xs px-2 py-0.5 rounded-full"
+                      style={{ background: 'rgba(77,139,255,0.1)', color: '#4D8BFF', border: '1px solid rgba(77,139,255,0.2)' }}>
+                      {q.category}
+                    </span>
+                    {q.is_scenario && (
                       <span className="text-xs px-2 py-0.5 rounded-full"
-                        style={{ background: `${q.branches.color}15`, color: q.branches.color }}>
-                        {q.branches.name}
+                        style={{ background: 'rgba(139,92,246,0.1)', color: '#A78BFA', border: '1px solid rgba(139,92,246,0.2)' }}>
+                        🎭 Scénario
                       </span>
                     )}
-                    <span className="text-xs" style={{ color: DIFF_COLOR[q.difficulty] }}>{DIFF_LABEL[q.difficulty]}</span>
-                    {q.delete_requested_by && (
-                      <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
-                        style={{ background: 'rgba(255,77,106,0.12)', color: '#FF4D6A', border: '1px solid rgba(255,77,106,0.25)' }}>
-                        🗑 Suppression demandée
-                      </span>
-                    )}
+                    {q.times_used > 0 && <span className="text-gray-600 text-xs">⟳ {q.times_used}×</span>}
                     <span className="text-gray-600 text-xs">{new Date(q.created_at).toLocaleDateString('fr-CA')}</span>
                   </div>
                 </div>
 
-                {/* Action buttons */}
-                <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap justify-end">
-                  {/* Approve/reject for pending */}
-                  {!q.is_active && filter !== 'delete_requests' && (
-                    <>
-                      <button onClick={() => approveReject(q.id, 'approve')}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                        style={{ background: 'rgba(37,194,146,0.15)', color: '#25C292', border: '1px solid rgba(37,194,146,0.3)' }}>
-                        ✓ Approuver
-                      </button>
-                      <button onClick={() => approveReject(q.id, 'reject')}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                        style={{ background: 'rgba(255,77,106,0.1)', color: '#FF4D6A', border: '1px solid rgba(255,77,106,0.2)' }}>
-                        ✗ Rejeter
-                      </button>
-                    </>
-                  )}
-
-                  {/* Delete request actions */}
-                  {q.delete_requested_by && (
-                    <>
-                      <button onClick={() => setDeletingId(q.id)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                        style={{ background: 'rgba(255,77,106,0.15)', color: '#FF4D6A', border: '1px solid rgba(255,77,106,0.3)' }}>
-                        <Trash2 size={11} /> Supprimer
-                      </button>
-                      <button onClick={() => denyDeleteRequest(q.id)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
-                        style={{ background: 'rgba(255,255,255,0.05)', color: '#9CA3AF', border: '1px solid rgba(255,255,255,0.1)' }}>
-                        Refuser
-                      </button>
-                    </>
-                  )}
-
-                  {/* Edit button — always visible */}
+                <div className="flex items-center gap-1.5 flex-shrink-0">
                   <button onClick={() => setEditing(q)}
                     className="p-1.5 rounded-lg transition-all"
                     style={{ color: '#D4A843', background: 'rgba(212,168,67,0.08)' }} title="Modifier">
                     <Pencil size={14} />
                   </button>
-
-                  {/* Direct delete — always visible */}
-                  {!q.delete_requested_by && (
-                    <button onClick={() => setDeletingId(q.id)}
-                      className="p-1.5 rounded-lg text-[#FF4D6A] hover:bg-[#FF4D6A]/10 transition-all" title="Supprimer directement">
-                      <Trash2 size={14} />
-                    </button>
-                  )}
+                  <button onClick={() => setDeletingId(q.id)}
+                    className="p-1.5 rounded-lg text-[#FF4D6A] hover:bg-[#FF4D6A]/10 transition-all" title="Supprimer">
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
 
-              {/* Expanded answers */}
               {expandedId === q.id && (
-                <div className="px-4 pb-4 border-t border-white/5 animate-slide-up">
+                <div className="px-4 pb-4 border-t border-white/5">
+                  {q.context && (
+                    <p className="mt-3 text-xs text-gray-400 italic leading-relaxed">{q.context}</p>
+                  )}
                   <div className="space-y-1.5 mt-3">
                     {q.answers.map((a, i) => (
-                      <div key={a.id} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
-                        style={{ background: a.is_correct ? 'rgba(37,194,146,0.08)' : 'rgba(255,255,255,0.02)', border: `1px solid ${a.is_correct ? 'rgba(37,194,146,0.2)' : 'rgba(255,255,255,0.05)'}` }}>
+                      <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
+                        style={{
+                          background: a === q.correct_answer ? 'rgba(37,194,146,0.08)' : 'rgba(255,255,255,0.02)',
+                          border: `1px solid ${a === q.correct_answer ? 'rgba(37,194,146,0.2)' : 'rgba(255,255,255,0.05)'}`,
+                        }}>
                         <span className="text-xs w-4 text-gray-500">{String.fromCharCode(65 + i)}.</span>
-                        <span className={a.is_correct ? 'text-[#25C292] font-medium' : 'text-gray-400'}>{a.answer_text}</span>
-                        {a.is_correct && <span className="ml-auto text-[#25C292] text-xs">✓ Correct</span>}
+                        <span className={a === q.correct_answer ? 'text-[#25C292] font-medium' : 'text-gray-400'}>{a}</span>
+                        {a === q.correct_answer && <span className="ml-auto text-[#25C292] text-xs">✓ Correct</span>}
                       </div>
                     ))}
-                    {q.explanation && (
-                      <div className="mt-2 px-3 py-2 rounded-lg text-xs text-gray-400"
-                        style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                        💡 {q.explanation}
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
@@ -1075,7 +992,20 @@ function QuestionsApprovalTab({ addToast }: { addToast: AddToast }) {
         </div>
       )}
 
-      {/* Delete confirmation dialog */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3">
+          <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
+            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 disabled:opacity-30 transition-colors">
+            <ChevronLeft size={15} />
+          </button>
+          <span className="text-gray-400 text-sm">{page}/{totalPages}</span>
+          <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 disabled:opacity-30 transition-colors">
+            <ChevronRight size={15} />
+          </button>
+        </div>
+      )}
+
       {deletingId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.8)' }}>
           <div className="rpg-card p-6 max-w-sm w-full text-center space-y-4">
@@ -1098,12 +1028,11 @@ function QuestionsApprovalTab({ addToast }: { addToast: AddToast }) {
         </div>
       )}
 
-      {/* Edit modal */}
       {editing && (
         <EditQuestionModal
           question={editing}
           onClose={() => setEditing(null)}
-          onSaved={() => { fetchQ(filter); setEditing(null) }}
+          onSaved={() => { fetchQ(); setEditing(null) }}
           addToast={addToast}
         />
       )}
@@ -1117,41 +1046,32 @@ function EditQuestionModal({ question, onClose, onSaved, addToast }: {
   onSaved: () => void
   addToast: AddToast
 }) {
-  const DIFF_LABEL = ['', 'Débutant', 'Intermédiaire', 'Expert']
-  const DIFF_COLOR = ['', '#25C292', '#F59E0B', '#FF4D6A']
-
-  const [text, setTextVal]         = useState(question.question_text)
-  const [explanation, setExplanation] = useState(question.explanation ?? '')
-  const [tip, setTip]              = useState(question.tip ?? '')
-  const [difficulty, setDifficulty] = useState<1 | 2 | 3>(question.difficulty as 1 | 2 | 3 ?? 1)
-  const [answers, setAnswers]      = useState(
-    question.answers.map(a => ({ answer_text: a.answer_text, is_correct: a.is_correct }))
+  const [text, setText]           = useState(question.question)
+  const [context, setContext]     = useState(question.context ?? '')
+  const [isScenario, setIsScenario] = useState(question.is_scenario)
+  const [category, setCategory]   = useState(question.category)
+  const [answers, setAnswers]     = useState([...question.answers])
+  const [correctIdx, setCorrectIdx] = useState(
+    Math.max(0, question.answers.indexOf(question.correct_answer))
   )
-  const [saving, setSaving]        = useState(false)
-
-  function setCorrect(idx: number) {
-    setAnswers(prev => prev.map((a, i) => ({ ...a, is_correct: i === idx })))
-  }
+  const [saving, setSaving]       = useState(false)
 
   async function save() {
-    if (!text.trim() || !explanation.trim()) {
-      addToast({ type: 'error', title: 'Question et explication requises.' }); return
-    }
-    const filled = answers.filter(a => a.answer_text.trim())
-    if (filled.length < 2) {
-      addToast({ type: 'error', title: 'Au moins 2 réponses requises.' }); return
-    }
+    const filled = answers.map(a => a.trim()).filter(Boolean)
+    if (!text.trim()) { addToast({ type: 'error', title: 'Question obligatoire.' }); return }
+    if (filled.length < 2) { addToast({ type: 'error', title: 'Au moins 2 réponses requises.' }); return }
+    if (isScenario && !context.trim()) { addToast({ type: 'error', title: 'Contexte obligatoire pour un scénario.' }); return }
     setSaving(true)
     const res = await fetch(`/api/admin/questions/${question.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'edit',
-        question_text: text.trim(),
-        explanation: explanation.trim(),
-        tip: tip.trim() || null,
-        difficulty,
-        answers: filled,
+        question:       text.trim(),
+        context:        isScenario ? context.trim() : null,
+        answers:        filled,
+        correct_answer: filled[correctIdx] ?? filled[0],
+        category:       category.trim(),
+        is_scenario:    isScenario,
       }),
     })
     const data = await res.json()
@@ -1175,31 +1095,41 @@ function EditQuestionModal({ question, onClose, onSaved, addToast }: {
           </button>
         </div>
 
-        {/* Question text */}
+        {/* Scénario toggle */}
+        <div className="flex items-center justify-between p-3 rounded-xl"
+          style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+          <span className="text-sm text-gray-300">Mode scénario</span>
+          <button type="button" onClick={() => setIsScenario(v => !v)}
+            className="w-10 h-5 rounded-full transition-all relative"
+            style={{ background: isScenario ? '#8B5CF6' : 'rgba(255,255,255,0.1)' }}>
+            <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
+              style={{ left: isScenario ? '22px' : '2px' }} />
+          </button>
+        </div>
+
+        {isScenario && (
+          <div>
+            <label className="text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Contexte *</label>
+            <textarea value={context} onChange={e => setContext(e.target.value)} rows={2}
+              className="w-full bg-[#080A12] border border-purple-500/20 rounded-lg px-3 py-2.5 text-white text-sm resize-none focus:outline-none" />
+          </div>
+        )}
+
+        {/* Catégorie */}
+        <div>
+          <label className="text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Catégorie *</label>
+          <input value={category} onChange={e => setCategory(e.target.value)}
+            className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#D4A843]/50 transition-colors" />
+        </div>
+
+        {/* Question */}
         <div>
           <label className="text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Question *</label>
-          <textarea value={text} onChange={e => setTextVal(e.target.value)} rows={3}
+          <textarea value={text} onChange={e => setText(e.target.value)} rows={3}
             className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm resize-none focus:outline-none focus:border-[#D4A843]/50 transition-colors" />
         </div>
 
-        {/* Difficulty */}
-        <div>
-          <label className="text-gray-400 text-xs uppercase tracking-wider block mb-2">Difficulté *</label>
-          <div className="flex gap-2">
-            {([1, 2, 3] as const).map(d => (
-              <button key={d} type="button" onClick={() => setDifficulty(d)}
-                className="flex-1 py-2 rounded-lg text-sm font-semibold transition-all"
-                style={difficulty === d
-                  ? { background: `${DIFF_COLOR[d]}20`, border: `1px solid ${DIFF_COLOR[d]}50`, color: DIFF_COLOR[d] }
-                  : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: '#6B7280' }
-                }>
-                {DIFF_LABEL[d]}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Answers */}
+        {/* Réponses */}
         <div>
           <label className="text-gray-400 text-xs uppercase tracking-wider block mb-2">
             Réponses * <span className="normal-case text-gray-600">(✓ = bonne réponse)</span>
@@ -1207,14 +1137,14 @@ function EditQuestionModal({ question, onClose, onSaved, addToast }: {
           <div className="space-y-2">
             {answers.map((a, i) => (
               <div key={i} className="flex items-center gap-2">
-                <button type="button" onClick={() => setCorrect(i)}
+                <button type="button" onClick={() => setCorrectIdx(i)}
                   className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-sm transition-all border"
-                  style={a.is_correct
+                  style={correctIdx === i
                     ? { background: 'rgba(37,194,146,0.2)', borderColor: '#25C292', color: '#25C292' }
                     : { background: 'transparent', borderColor: 'rgba(255,255,255,0.12)', color: '#4B5563' }
                   }>✓</button>
-                <input value={a.answer_text}
-                  onChange={e => setAnswers(prev => prev.map((ans, j) => j === i ? { ...ans, answer_text: e.target.value } : ans))}
+                <input value={a}
+                  onChange={e => setAnswers(prev => prev.map((x, j) => j === i ? e.target.value : x))}
                   className="flex-1 bg-[#080A12] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#D4A843]/50 transition-colors"
                   placeholder={`Réponse ${i + 1}`} />
               </div>
@@ -1222,24 +1152,6 @@ function EditQuestionModal({ question, onClose, onSaved, addToast }: {
           </div>
         </div>
 
-        {/* Explanation */}
-        <div>
-          <label className="text-gray-400 text-xs uppercase tracking-wider block mb-1.5">Explication *</label>
-          <textarea value={explanation} onChange={e => setExplanation(e.target.value)} rows={3}
-            className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm resize-none focus:outline-none focus:border-[#D4A843]/50 transition-colors" />
-        </div>
-
-        {/* Tip */}
-        <div>
-          <label className="text-gray-400 text-xs uppercase tracking-wider block mb-1.5">
-            Astuce 💡 <span className="normal-case text-gray-600">(optionnel)</span>
-          </label>
-          <input value={tip} onChange={e => setTip(e.target.value)}
-            className="w-full bg-[#080A12] border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#D4A843]/50 transition-colors"
-            placeholder="Moyen mnémotechnique ou conseil..." />
-        </div>
-
-        {/* Actions */}
         <div className="flex gap-3 pt-1">
           <button onClick={onClose}
             className="flex-1 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"

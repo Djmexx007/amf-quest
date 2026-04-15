@@ -13,6 +13,15 @@ export async function GET(
 
   const { slug } = await params
 
+  // Résoudre le slug depuis branch_id
+  const { data: branchData } = await supabaseAdmin
+    .from('branches')
+    .select('slug')
+    .eq('id', payload.branch_id)
+    .single()
+
+  const branchSlug = branchData?.slug ?? ''
+
   const [modRes, progressRes, qCountRes, charRes] = await Promise.all([
     supabaseAdmin
       .from('modules')
@@ -32,9 +41,8 @@ export async function GET(
     supabaseAdmin
       .from('questions')
       .select('id', { count: 'exact', head: true })
-      .contains('game_types', ['quiz'])
-      .eq('branch_id', payload.branch_id)
-      .eq('status', 'approved'),
+      .eq('branch', branchSlug)
+      .eq('is_scenario', false),
 
     supabaseAdmin
       .from('characters')
@@ -47,9 +55,9 @@ export async function GET(
   if (!modRes.data) return NextResponse.json({ error: 'Module introuvable.' }, { status: 404 })
 
   return NextResponse.json({
-    module: modRes.data,
-    progress: progressRes.data ?? null,
-    question_count: qCountRes.count ?? 0,
-    character_level: charRes.data?.level ?? 1,
+    module:           modRes.data,
+    progress:         progressRes.data ?? null,
+    question_count:   qCountRes.count ?? 0,
+    character_level:  charRes.data?.level ?? 1,
   })
 }

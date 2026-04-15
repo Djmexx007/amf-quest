@@ -1,56 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/server'
 import { verifyAccessToken } from '@/lib/auth'
-import type { GameType, QuestionType } from '@/types'
 
+/**
+ * GET /api/game/questions
+ *
+ * Params:
+ *   count     — nombre de questions (défaut 10, max 50)
+ *   scenario  — 'true' pour mode scénario, 'false' (défaut) pour mini-jeux normaux
+ *   category  — nom de catégorie (Arène du Savoir uniquement)
+ *
+ * La difficulté est gérée exclusivement par le gameplay (vitesse, vies, etc.),
+ * jamais par les questions elles-mêmes.
+ */
 export async function GET(request: NextRequest) {
   const token = request.cookies.get('amf_access')?.value
   if (!token) return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 })
+
   const payload = verifyAccessToken(token)
-  if (!payload || !payload.branch_id) return NextResponse.json({ error: 'Branche requise.' }, { status: 400 })
+  if (!payload || !payload.branch_id) {
+    return NextResponse.json({ error: 'Branche requise.' }, { status: 400 })
+  }
+
+  // Résoudre le slug de branche depuis le branch_id JWT
+  const { data: branchData } = await supabaseAdmin
+    .from('branches')
+    .select('slug')
+    .eq('id', payload.branch_id)
+    .single()
+
+  if (!branchData) {
+    return NextResponse.json({ error: 'Branche introuvable.' }, { status: 400 })
+  }
 
   const { searchParams } = request.nextUrl
-  const gameType    = searchParams.get('game') as GameType | null
-  const qType       = searchParams.get('type') as QuestionType | null
-  const category    = searchParams.get('category')           // category_id
-  const count       = Math.min(Number(searchParams.get('count') ?? '10'), 50)
-  const difficulty  = searchParams.get('difficulty')
-  // Comma-separated list of question IDs to exclude (already-seen deduplication)
-  const excludeRaw  = searchParams.get('exclude')
-  const exclude     = excludeRaw ? excludeRaw.split(',').filter(Boolean) : []
+  const count      = Math.min(Number(searchParams.get('count') ?? '10'), 50)
+  const isScenario = searchParams.get('scenario') === 'true'
+  const category   = searchParams.get('category') ?? null
 
+  // Fetch 3× le nombre demandé pour avoir de la marge après mélange
   let query = supabaseAdmin
     .from('questions')
-    .select(`
-      id,
-      question_text,
-      context_text,
-      icon,
-      difficulty,
-      question_type,
-      category_id,
-      explanation,
-      tip,
-      answers(id, answer_text, is_correct, order_index, answer_metadata),
-      question_categories(id, name, icon, color)
-    `)
-    .eq('branch_id', payload.branch_id)
-    .eq('status', 'approved')
+    .select('id, question, context, answers, correct_answer, branch, category, is_scenario')
+    .eq('branch', branchData.slug)
+    .eq('is_scenario', isScenario)
+    .order('last_used_at', { ascending: true, nullsFirst: true })
+    .limit(Math.min(count * 3, 150))
 
-  if (gameType) {
-    query = query.contains('game_types', [gameType])
-  }
-  if (qType) {
-    query = query.eq('question_type', qType)
-  }
   if (category) {
-    query = query.eq('category_id', category)
-  }
-  if (difficulty) {
-    query = query.eq('difficulty', Number(difficulty))
-  }
-  if (exclude.length > 0) {
-    query = query.not('id', 'in', `(${exclude.join(',')})`)
+    query = query.eq('category', category)
   }
 
   const { data: questions, error } = await query
@@ -60,17 +58,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Aucune question disponible pour cette branche.' }, { status: 404 })
   }
 
-  // Shuffle and pick N
-  const shuffled = questions.sort(() => Math.random() - 0.5).slice(0, count)
-  const withShuffledAnswers = shuffled.map((q) => ({
+  // Mélanger et prendre N questions
+  const shuffled = [...questions].sort(() => Math.random() - 0.5).slice(0, count)
+
+  // Anti-répétition: marquer les questions comme utilisées (fire and forget)
+  const ids = shuffled.map(q => q.id)
+  void supabaseAdmin.rpc('mark_questions_used', { question_ids: ids })
+
+  // Mélanger les réponses à l'intérieur de chaque question
+  const result = shuffled.map(q => ({
     ...q,
-    answers: (q.answers as { id: string; answer_text: string; is_correct: boolean; order_index: number; answer_metadata: Record<string, unknown> | null }[])
-      // For sorting questions, preserve correct order; shuffle all others
-      .sort(q.question_type === 'sorting'
-        ? (a, b) => Math.random() - 0.5  // randomize display order, client orders by answer_metadata.correct_position
-        : () => Math.random() - 0.5
-      ),
+    answers: [...(q.answers as string[])].sort(() => Math.random() - 0.5),
   }))
 
-  return NextResponse.json({ questions: withShuffledAnswers })
+  return NextResponse.json({ questions: result })
 }

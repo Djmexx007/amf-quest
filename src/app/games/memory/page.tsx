@@ -39,16 +39,15 @@ export default function MemoryPage() {
 
   async function startGame() {
     const pairsCount = GRID_SIZES[gridSize]
-    const res = await fetch(`/api/game/questions?game=quiz&count=${pairsCount}`)
+    const res = await fetch(`/api/game/questions?count=${pairsCount}`)
     const data = await res.json()
     if (!data.questions?.length) { alert('Pas assez de questions disponibles.'); return }
 
     const qs = data.questions.slice(0, pairsCount)
     const deck: Card[] = []
-    qs.forEach((q: { id: string; question_text: string; answers: { is_correct: boolean; answer_text: string }[] }) => {
-      const correctAnswer = q.answers.find((a) => a.is_correct)?.answer_text ?? '—'
-      deck.push({ id: `t-${q.id}`, content: q.question_text, pairId: q.id, type: 'term', flipped: false, matched: false })
-      deck.push({ id: `d-${q.id}`, content: correctAnswer, pairId: q.id, type: 'def', flipped: false, matched: false })
+    qs.forEach((q: { id: string; question: string; correct_answer: string }) => {
+      deck.push({ id: `t-${q.id}`, content: q.question, pairId: q.id, type: 'term', flipped: false, matched: false })
+      deck.push({ id: `d-${q.id}`, content: q.correct_answer, pairId: q.id, type: 'def', flipped: false, matched: false })
     })
     // Shuffle
     deck.sort(() => Math.random() - 0.5)

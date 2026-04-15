@@ -9,13 +9,12 @@ import AchievementUnlockToast from '@/components/ui/AchievementUnlockToast'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface Answer { id: string; answer_text: string; is_correct: boolean }
 interface Question {
   id: string
-  question_text: string
-  context_text: string | null
-  explanation: string
-  answers: Answer[]
+  question: string
+  context: string | null
+  answers: string[]
+  correct_answer: string
 }
 
 type NodeType = 'start' | 'combat' | 'elite' | 'rest' | 'event' | 'shop' | 'boss'
@@ -164,7 +163,7 @@ export default function DungeonPage() {
   const [correct, setCorrect] = useState(0)
   const [total, setTotal] = useState(0)
   const [question, setQuestion] = useState<Question | null>(null)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
   const [branchColor, setBranchColor] = useState('#D4A843')
   const [allQuestions, setAllQuestions] = useState<Question[]>([])
   const [usedIds, setUsedIds] = useState<Set<string>>(new Set())
@@ -185,7 +184,7 @@ export default function DungeonPage() {
   useEffect(() => {
     Promise.all([
       fetch('/api/user/character').then(r => r.json()),
-      fetch('/api/game/questions?game=quiz&count=30&difficulty=2').then(r => r.json()),
+      fetch('/api/game/questions?count=30').then(r => r.json()),
     ]).then(([charData, qData]) => {
       if (charData.branch?.color) setBranchColor(charData.branch.color)
       if (qData.questions) setAllQuestions(qData.questions)
@@ -220,7 +219,7 @@ export default function DungeonPage() {
       if (!drawn) { markVisited(nodeId); return }
       setUsedIds(drawn.newUsed)
       setQuestion(drawn.q)
-      setSelectedId(null)
+      setSelectedAnswer(null)
       if (node.type === 'boss') { setBossHp(BOSS_MAX_HP); setPhase('boss_fight') }
       else setPhase(node.type)
     } else if (node.type === 'rest') {
@@ -233,12 +232,12 @@ export default function DungeonPage() {
     }
   }
 
-  function handleAnswer(answer: Answer, isElite: boolean, isBoss: boolean) {
-    if (selectedId) return
-    setSelectedId(answer.id)
+  function handleAnswer(answer: string, isElite: boolean, isBoss: boolean) {
+    if (selectedAnswer) return
+    setSelectedAnswer(answer)
     setTotal(t => t + 1)
 
-    if (answer.is_correct) {
+    if (answer === question?.correct_answer) {
       setCorrect(c => c + 1)
       setScore(s => s + (isBoss ? 300 : isElite ? 200 : 100))
       if (isBoss) {
@@ -279,13 +278,13 @@ export default function DungeonPage() {
     if (!drawn) return
     setUsedIds(drawn.newUsed)
     setQuestion(drawn.q)
-    setSelectedId(null)
+    setSelectedAnswer(null)
   }
 
   function backToMap() {
     setPhase('map')
     setQuestion(null)
-    setSelectedId(null)
+    setSelectedAnswer(null)
   }
 
   function handleEventChoice(opt: EventOption) {
@@ -350,7 +349,7 @@ export default function DungeonPage() {
     setReviveMsg('')
     setNotif('')
     setQuestion(null)
-    setSelectedId(null)
+    setSelectedAnswer(null)
     setActiveEvent(null)
     setResult(null)
     setPhase('map')
@@ -487,7 +486,7 @@ export default function DungeonPage() {
             </div>
           </div>
           <QuestionBlock
-            question={question} selectedId={selectedId}
+            question={question} selectedAnswer={selectedAnswer}
             onAnswer={(a) => handleAnswer(a, phase === 'elite', false)}
             onContinue={backToMap} branchColor={branchColor}
           />
@@ -513,7 +512,7 @@ export default function DungeonPage() {
             </div>
           </div>
           <QuestionBlock
-            question={question} selectedId={selectedId}
+            question={question} selectedAnswer={selectedAnswer}
             onAnswer={(a) => handleAnswer(a, false, true)}
             onContinue={bossHp > 0 ? continueBoss : undefined}
             continueLabel={bossHp > 0 ? 'Continuer le combat →' : undefined}
@@ -650,55 +649,51 @@ export default function DungeonPage() {
 
 // ─── QuestionBlock ───────────────────────────────────────────────────────────
 
-function QuestionBlock({ question, selectedId, onAnswer, onContinue, continueLabel, branchColor }: {
+function QuestionBlock({ question, selectedAnswer, onAnswer, onContinue, continueLabel, branchColor }: {
   question: Question
-  selectedId: string | null
-  onAnswer: (a: Answer) => void
+  selectedAnswer: string | null
+  onAnswer: (a: string) => void
   onContinue?: () => void
   continueLabel?: string
   branchColor: string
 }) {
-  const answered = !!selectedId
-  const correctId = question.answers.find(a => a.is_correct)?.id
+  const answered = !!selectedAnswer
 
   return (
     <div>
-      {question.context_text && (
+      {question.context && (
         <div className="mb-4 p-3 rounded-xl text-gray-400 text-sm italic"
           style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
-          {question.context_text}
+          {question.context}
         </div>
       )}
       <div className="rpg-card p-5 mb-4">
-        <p className="text-white font-medium leading-relaxed">{question.question_text}</p>
+        <p className="text-white font-medium leading-relaxed">{question.question}</p>
       </div>
       <div className="space-y-2 mb-4">
-        {question.answers.map(a => {
+        {question.answers.map((a, i) => {
           let bg = 'rgba(255,255,255,0.04)'
           let border = '1px solid rgba(255,255,255,0.10)'
           let color = ''
           let opacity = 1
           if (answered) {
-            if (a.is_correct) { bg = 'rgba(37,194,146,0.15)'; border = '1px solid rgba(37,194,146,0.5)'; color = '#25C292' }
-            else if (a.id === selectedId) { bg = 'rgba(255,77,106,0.15)'; border = '1px solid rgba(255,77,106,0.5)'; color = '#FF4D6A' }
+            if (a === question.correct_answer) { bg = 'rgba(37,194,146,0.15)'; border = '1px solid rgba(37,194,146,0.5)'; color = '#25C292' }
+            else if (a === selectedAnswer) { bg = 'rgba(255,77,106,0.15)'; border = '1px solid rgba(255,77,106,0.5)'; color = '#FF4D6A' }
             else opacity = 0.4
           }
           return (
-            <button key={a.id} onClick={() => !answered && onAnswer(a)} disabled={answered}
+            <button key={i} onClick={() => !answered && onAnswer(a)} disabled={answered}
               className="w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all duration-150 disabled:cursor-default"
               style={{ background: bg, border, color: color || undefined, opacity }}>
-              {a.answer_text}
+              {a}
             </button>
           )
         })}
       </div>
-      {answered && (
-        <div className="mb-4 p-3 rounded-xl text-sm text-gray-400"
-          style={{
-            background: selectedId === correctId ? 'rgba(37,194,146,0.08)' : 'rgba(255,77,106,0.08)',
-            border: `1px solid ${selectedId === correctId ? 'rgba(37,194,146,0.2)' : 'rgba(255,77,106,0.2)'}`,
-          }}>
-          💡 {question.explanation}
+      {answered && selectedAnswer !== question.correct_answer && (
+        <div className="mb-4 p-3 rounded-xl text-sm"
+          style={{ background: 'rgba(255,77,106,0.08)', border: '1px solid rgba(255,77,106,0.2)', color: '#9CA3AF' }}>
+          Bonne réponse : <span className="text-green-400 font-medium">{question.correct_answer}</span>
         </div>
       )}
       {answered && onContinue && (

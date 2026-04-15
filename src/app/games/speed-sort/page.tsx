@@ -5,8 +5,7 @@ import GameShell from '@/components/games/GameShell'
 import ResultScreen from '@/components/games/ResultScreen'
 import AchievementUnlockToast from '@/components/ui/AchievementUnlockToast'
 
-interface Answer { answer_text: string; is_correct: boolean }
-interface Question { id: string; question_text: string; answers: Answer[] }
+interface Question { id: string; question: string; correct_answer: string }
 
 interface FallingItem {
   id: string
@@ -45,13 +44,13 @@ export default function SpeedSortPage() {
   }, [])
 
   async function startGame() {
-    const res = await fetch('/api/game/questions?game=quiz&count=30')
+    const res = await fetch('/api/game/questions?count=30')
     const data = await res.json()
     if (!data.questions?.length) { alert('Pas de questions disponibles.'); return }
 
     // Build categories from correct answers
     const qs: Question[] = data.questions
-    const cats = [...new Set(qs.map((q: Question) => q.answers.find(a => a.is_correct)?.answer_text ?? 'Autre').slice(0, 4))] as string[]
+    const cats = [...new Set(qs.map((q: Question) => q.correct_answer).slice(0, 4))] as string[]
     setCategories(cats)
     itemQueue.current = qs
     setItems([]); setScore(0); setCorrect(0); setTotal(0); setCombo(0); setTimeLeft(60)
@@ -82,8 +81,8 @@ export default function SpeedSortPage() {
         const q = itemQueue.current.shift()!
         const newItem: FallingItem = {
           id: `${q.id}-${ts}`,
-          label: q.question_text.slice(0, 40),
-          correctCategory: q.answers.find(a => a.is_correct)?.answer_text ?? categories[0] ?? '',
+          label: q.question.slice(0, 40),
+          correctCategory: q.correct_answer ?? categories[0] ?? '',
           x: 10 + Math.random() * 80,
           y: 0,
           speed: 0.08 + Math.random() * 0.06,

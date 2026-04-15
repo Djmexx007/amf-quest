@@ -5,46 +5,42 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation'
 import { Flag, ChevronLeft, ChevronRight, Clock, CheckCircle, XCircle, AlertTriangle, RotateCcw, LayoutGrid } from 'lucide-react'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-interface Answer  { id: string; answer_text: string; is_correct: boolean }
+
 interface Question {
-  id: string; question_text: string; context_text: string | null
-  icon: string; difficulty: number; explanation: string; tip: string | null
-  answers: Answer[]
+  id: string
+  question: string
+  context: string | null
+  answers: string[]
+  correct_answer: string
+  branch: string
+  category: string
+  is_scenario: boolean
 }
 
 type Phase = 'loading' | 'exam' | 'confirm' | 'result'
 type ReviewFilter = 'all' | 'correct' | 'wrong'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
+
 function pad(n: number) { return String(n).padStart(2, '0') }
 function fmtTime(s: number) { return `${pad(Math.floor(s / 60))}:${pad(s % 60)}` }
 
-// ── Difficulty dot display ─────────────────────────────────────────────────────
-function DiffDots({ d }: { d: number }) {
-  return (
-    <span className="flex gap-0.5">
-      {[1,2,3].map(i => (
-        <span key={i} className="w-1.5 h-1.5 rounded-full"
-          style={{ background: i <= d ? (d === 1 ? '#25C292' : d === 2 ? '#F59E0B' : '#FF4D6A') : 'rgba(255,255,255,0.12)' }} />
-      ))}
-    </span>
-  )
-}
-
 // ── Main page ──────────────────────────────────────────────────────────────────
+
 export default function ExamPage() {
   const router       = useRouter()
   const { slug }     = useParams<{ slug: string }>()
   const searchParams = useSearchParams()
 
-  const difficulty = (parseInt(searchParams.get('difficulty') ?? '2') as 1|2|3)
+  // Difficulté = paramètre du JEU (nb questions + temps + calcul XP), PAS des questions
+  const difficulty = (parseInt(searchParams.get('difficulty') ?? '2') as 1 | 2 | 3)
   const count      = Math.min(50, Math.max(5, parseInt(searchParams.get('count') ?? '30')))
-  const duration   = Math.max(10, parseInt(searchParams.get('duration') ?? '45')) * 60 // to seconds
+  const duration   = Math.max(10, parseInt(searchParams.get('duration') ?? '45')) * 60
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [phase, setPhase]         = useState<Phase>('loading')
   const [questions, setQuestions] = useState<Question[]>([])
-  const [selected, setSelected]   = useState<(string | null)[]>([])  // answerId per question
+  const [selected, setSelected]   = useState<(string | null)[]>([])   // texte de la réponse choisie
   const [flagged, setFlagged]     = useState<boolean[]>([])
   const [current, setCurrent]     = useState(0)
   const [timeLeft, setTimeLeft]   = useState(duration)
@@ -65,10 +61,8 @@ export default function ExamPage() {
   // ── Load questions ─────────────────────────────────────────────────────────
   useEffect(() => {
     Promise.all([
-      fetch(`/api/game/questions?game=quiz&count=${count}&difficulty=${difficulty}`)
-        .then(r => r.json()),
-      fetch(`/api/modules/${slug}`)
-        .then(r => r.json()),
+      fetch(`/api/game/questions?count=${count}`).then(r => r.json()),
+      fetch(`/api/modules/${slug}`).then(r => r.json()),
       fetch('/api/modules').then(r => r.json()),
     ]).then(([qData, modData, listData]) => {
       const qs: Question[] = qData.questions ?? []
@@ -82,24 +76,20 @@ export default function ExamPage() {
       startTimeRef.current = Date.now()
       setPhase('exam')
     })
-  }, [slug, count, difficulty, router])
+  }, [slug, count, router])
 
-  // ── Timer ──────────────────────────────────────────────────────────────────
+  // ── Submit ─────────────────────────────────────────────────────────────────
   const submitExam = useCallback(async (forced = false) => {
     if (timerRef.current) clearInterval(timerRef.current)
     setPhase('result')
 
-    const timeUsed = Math.round((Date.now() - startTimeRef.current) / 1000)
-    const correct  = questions.filter((q, i) => {
-      const ans = q.answers.find(a => a.id === selected[i])
-      return ans?.is_correct === true
-    }).length
+    const timeUsed  = Math.round((Date.now() - startTimeRef.current) / 1000)
+    const correct   = questions.filter((q, i) => selected[i] === q.correct_answer).length
     const total     = questions.length
     const score_pct = total > 0 ? Math.round((correct / total) * 100) : 0
     const passed    = score_pct >= 60
     const timeBonusPct = forced ? 0 : Math.max(0, 1 - timeUsed / duration)
 
-    // Save progress
     if (moduleId) {
       await fetch('/api/exam/progress', {
         method: 'POST',
@@ -114,30 +104,30 @@ export default function ExamPage() {
       })
     }
 
-    // Award XP/coins
     const gameRes = await fetch('/api/game/complete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        game_type: 'exam',
-        score: score_pct,
-        questions_total: total,
-        questions_correct: correct,
-        best_streak: 0,
-        avg_time_seconds: total > 0 ? timeUsed / total : 30,
+        game_type:          'exam',
+        score:              score_pct,
+        questions_total:    total,
+        questions_correct:  correct,
+        best_streak:        0,
+        avg_time_seconds:   total > 0 ? timeUsed / total : 30,
         difficulty,
-        time_bonus_pct: timeBonusPct,
+        time_bonus_pct:     timeBonusPct,
       }),
     }).then(r => r.json())
 
     setResult({
       score_pct, correct, total, passed, time_used: timeUsed,
-      xp: gameRes.xp_earned ?? 0,
-      coins: gameRes.coins_earned ?? 0,
-      levelUp: gameRes.level_up ?? false,
+      xp:      gameRes.xp_earned    ?? 0,
+      coins:   gameRes.coins_earned  ?? 0,
+      levelUp: gameRes.level_up      ?? false,
     })
   }, [questions, selected, moduleId, duration, difficulty])
 
+  // ── Timer ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (phase !== 'exam') return
     timerRef.current = setInterval(() => {
@@ -150,9 +140,9 @@ export default function ExamPage() {
   }, [phase, submitExam])
 
   // ── Interaction ────────────────────────────────────────────────────────────
-  function selectAnswer(answerId: string) {
+  function selectAnswer(text: string) {
     if (phase !== 'exam') return
-    setSelected(prev => { const n = [...prev]; n[current] = answerId; return n })
+    setSelected(prev => { const n = [...prev]; n[current] = text; return n })
   }
 
   function toggleFlag() {
@@ -181,18 +171,12 @@ export default function ExamPage() {
 
   // ── Results ────────────────────────────────────────────────────────────────
   if (phase === 'result' && result) {
-    const filtered = questions.filter((_, i) => {
-      const correct = questions[i].answers.find(a => a.id === selected[i])?.is_correct === true
-      if (reviewFilter === 'correct') return correct
-      if (reviewFilter === 'wrong')   return !correct
-      return true
-    })
     const filteredIndexes = questions
       .map((_, i) => i)
       .filter(i => {
-        const correct = questions[i].answers.find(a => a.id === selected[i])?.is_correct === true
-        if (reviewFilter === 'correct') return correct
-        if (reviewFilter === 'wrong')   return !correct
+        const isCorrect = selected[i] === questions[i].correct_answer
+        if (reviewFilter === 'correct') return isCorrect
+        if (reviewFilter === 'wrong')   return !isCorrect
         return true
       })
 
@@ -204,7 +188,6 @@ export default function ExamPage() {
           <div className="absolute inset-0 pointer-events-none"
             style={{ background: `radial-gradient(circle at 50% 0%, ${result.passed ? 'rgba(37,194,146,0.07)' : 'rgba(255,77,106,0.07)'} 0%, transparent 70%)` }} />
           <div className="relative">
-            {/* Pass/fail badge */}
             <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full font-cinzel font-bold text-sm mb-5"
               style={result.passed
                 ? { background: 'rgba(37,194,146,0.15)', color: '#25C292', border: '1px solid rgba(37,194,146,0.3)' }
@@ -213,7 +196,6 @@ export default function ExamPage() {
               {result.passed ? 'RÉUSSI' : 'ÉCHOUÉ'}
             </div>
 
-            {/* Big score */}
             <div className="font-cinzel font-black text-6xl mb-1"
               style={{ color: result.passed ? '#25C292' : '#FF4D6A' }}>
               {result.score_pct}%
@@ -229,7 +211,6 @@ export default function ExamPage() {
               </div>
             )}
 
-            {/* XP / Coins */}
             <div className="flex justify-center gap-6">
               <div className="text-center">
                 <p className="font-cinzel font-bold text-xl" style={{ color: branchColor }}>+{result.xp}</p>
@@ -262,10 +243,9 @@ export default function ExamPage() {
 
           <div className="space-y-3">
             {filteredIndexes.map(i => {
-              const question = questions[i]
-              const userAns  = question.answers.find(a => a.id === selected[i])
-              const corrAns  = question.answers.find(a => a.is_correct)
-              const isOk     = userAns?.is_correct === true
+              const question  = questions[i]
+              const userAns   = selected[i]
+              const isOk      = userAns === question.correct_answer
 
               return (
                 <div key={question.id} className="rpg-card p-4 space-y-3"
@@ -277,33 +257,24 @@ export default function ExamPage() {
                         : <XCircle    size={16} style={{ color: '#FF4D6A' }} />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-gray-500 text-xs">Q{i + 1}</span>
-                        <DiffDots d={question.difficulty} />
-                      </div>
-                      <p className="text-white text-sm leading-relaxed">{question.question_text}</p>
+                      <p className="text-gray-500 text-xs mb-1">Q{i + 1}</p>
+                      {question.context && (
+                        <p className="text-gray-500 text-xs italic mb-1 leading-relaxed">{question.context}</p>
+                      )}
+                      <p className="text-white text-sm leading-relaxed">{question.question}</p>
                     </div>
                   </div>
 
-                  {/* Answers summary */}
                   <div className="pl-7 space-y-1.5 text-xs">
                     {!isOk && (
                       <p style={{ color: '#FF4D6A' }}>
-                        Ta réponse : {userAns?.answer_text ?? <em>Sans réponse</em>}
+                        Ta réponse : {userAns ?? <em>Sans réponse</em>}
                       </p>
                     )}
                     <p style={{ color: '#25C292' }}>
-                      {isOk ? '✓ ' : 'Bonne réponse : '}{corrAns?.answer_text}
+                      {isOk ? '✓ ' : 'Bonne réponse : '}{question.correct_answer}
                     </p>
                   </div>
-
-                  {/* Explanation */}
-                  {question.explanation && (
-                    <div className="pl-7 text-xs text-gray-500 leading-relaxed border-t border-white/5 pt-2.5">
-                      <span className="text-[#D4A843] font-semibold mr-1">💡</span>
-                      {question.explanation}
-                    </div>
-                  )}
                 </div>
               )
             })}
@@ -338,18 +309,13 @@ export default function ExamPage() {
       {/* Top bar */}
       <div className="flex-shrink-0 px-4 py-3 border-b border-white/[0.06] flex items-center gap-3"
         style={{ background: '#0a0e1a' }}>
-        {/* Module name */}
         <span className="font-cinzel font-bold text-white text-sm hidden sm:block truncate max-w-[160px]">
           {modTitle}
         </span>
         <div className="flex-1" />
-
-        {/* Question counter */}
         <span className="text-gray-400 text-sm">
           <strong className="text-white">{current + 1}</strong>/{questions.length}
         </span>
-
-        {/* Timer */}
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
           style={{ background: `${timerColor}12`, border: `1px solid ${timerColor}30` }}>
           <Clock size={13} style={{ color: timerColor }} />
@@ -357,8 +323,6 @@ export default function ExamPage() {
             {fmtTime(timeLeft)}
           </span>
         </div>
-
-        {/* Grid nav toggle */}
         <button onClick={() => setNavOpen(v => !v)}
           className="p-2 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors">
           <LayoutGrid size={16} />
@@ -405,15 +369,12 @@ export default function ExamPage() {
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded" style={{ background: 'rgba(245,158,11,0.2)' }} /> Marquée
               </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded" style={{ background: 'rgba(255,255,255,0.05)' }} /> Vide
-              </span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Progress dots */}
+      {/* Progress bar */}
       <div className="flex-shrink-0 px-4 py-2 flex gap-0.5 overflow-x-auto"
         style={{ background: '#09101f' }}>
         {questions.map((_, i) => (
@@ -437,10 +398,13 @@ export default function ExamPage() {
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="max-w-xl mx-auto space-y-5">
 
-          {/* Question header */}
+          {/* Header */}
           <div className="flex items-center gap-3">
             <span className="text-gray-600 text-xs font-medium tracking-wider">Q{current + 1}</span>
-            <DiffDots d={q.difficulty} />
+            <span className="text-xs px-2 py-0.5 rounded-full"
+              style={{ background: 'rgba(77,139,255,0.08)', color: '#4D8BFF', border: '1px solid rgba(77,139,255,0.15)' }}>
+              {q.category}
+            </span>
             {flagged[current] && (
               <span className="text-xs text-yellow-500 flex items-center gap-1">
                 <Flag size={10} /> Marquée
@@ -448,24 +412,24 @@ export default function ExamPage() {
             )}
           </div>
 
-          {/* Context */}
-          {q.context_text && (
+          {/* Context (scénario) */}
+          {q.context && (
             <div className="p-4 rounded-xl text-sm text-gray-300 leading-relaxed"
-              style={{ background: 'rgba(255,255,255,0.03)', borderLeft: `3px solid ${branchColor}50` }}>
-              {q.context_text}
+              style={{ background: 'rgba(139,92,246,0.06)', borderLeft: `3px solid rgba(139,92,246,0.4)` }}>
+              {q.context}
             </div>
           )}
 
-          {/* Question text */}
-          <p className="text-white text-base leading-relaxed font-medium">{q.question_text}</p>
+          {/* Question */}
+          <p className="text-white text-base leading-relaxed font-medium">{q.question}</p>
 
-          {/* Answer choices */}
+          {/* Answers */}
           <div className="space-y-2.5">
             {q.answers.map((ans, ai) => {
-              const isSelected = selected[current] === ans.id
+              const isSelected = selected[current] === ans
               const letter     = String.fromCharCode(65 + ai)
               return (
-                <button key={ans.id} onClick={() => selectAnswer(ans.id)}
+                <button key={ai} onClick={() => selectAnswer(ans)}
                   className="w-full text-left rounded-xl p-4 transition-all flex items-center gap-3"
                   style={{
                     background: isSelected ? `${branchColor}15` : 'rgba(255,255,255,0.035)',
@@ -483,7 +447,7 @@ export default function ExamPage() {
                     {letter}
                   </span>
                   <span className="text-sm leading-relaxed" style={{ color: isSelected ? '#fff' : '#d1d5db' }}>
-                    {ans.answer_text}
+                    {ans}
                   </span>
                 </button>
               )
@@ -495,7 +459,6 @@ export default function ExamPage() {
       {/* Bottom controls */}
       <div className="flex-shrink-0 border-t border-white/[0.06] px-4 py-3 flex items-center gap-3"
         style={{ background: '#0a0e1a' }}>
-        {/* Flag */}
         <button onClick={toggleFlag}
           className="p-2.5 rounded-lg transition-all flex-shrink-0"
           style={flagged[current]
@@ -504,21 +467,17 @@ export default function ExamPage() {
           <Flag size={15} />
         </button>
 
-        {/* Prev / Next */}
-        <button onClick={() => current > 0 && goTo(current - 1)}
-          disabled={current === 0}
+        <button onClick={() => current > 0 && goTo(current - 1)} disabled={current === 0}
           className="p-2.5 rounded-lg border border-white/[0.07] text-gray-400 hover:text-white hover:bg-white/5 transition-all disabled:opacity-30">
           <ChevronLeft size={16} />
         </button>
-        <button onClick={() => current < questions.length - 1 && goTo(current + 1)}
-          disabled={current === questions.length - 1}
+        <button onClick={() => current < questions.length - 1 && goTo(current + 1)} disabled={current === questions.length - 1}
           className="p-2.5 rounded-lg border border-white/[0.07] text-gray-400 hover:text-white hover:bg-white/5 transition-all disabled:opacity-30">
           <ChevronRight size={16} />
         </button>
 
         <div className="flex-1" />
 
-        {/* Submit */}
         {phase === 'confirm' ? (
           <div className="flex items-center gap-2">
             <span className="text-yellow-500 text-xs flex items-center gap-1">
@@ -538,8 +497,11 @@ export default function ExamPage() {
           <button
             onClick={() => !allAnswered ? setPhase('confirm') : submitExam(false)}
             className="px-4 py-2 rounded-lg text-sm font-cinzel font-bold tracking-wider transition-all flex items-center gap-2"
-            style={{ background: `linear-gradient(135deg, ${branchColor}, ${branchColor}bb)`, color: '#080A12',
-              boxShadow: `0 0 16px ${branchColor}25` }}>
+            style={{
+              background: `linear-gradient(135deg, ${branchColor}, ${branchColor}bb)`,
+              color: '#080A12',
+              boxShadow: `0 0 16px ${branchColor}25`,
+            }}>
             {!allAnswered && (
               <span className="text-xs opacity-70 mr-0.5">{answered}/{questions.length}</span>
             )}

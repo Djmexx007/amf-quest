@@ -32,9 +32,10 @@ export type GameType =
 
 export type ItemType = 'avatar' | 'title' | 'boost' | 'cosmetic'
 
-export type QuestionType = 'mcq' | 'scenario' | 'sorting' | 'memory_pair' | 'regulation'
-
-export type QuestionStatus = 'pending' | 'approved' | 'rejected'
+/** @deprecated supprimé en v2 — la difficulté est gérée uniquement par le gameplay */
+export type QuestionType = 'mcq'
+/** @deprecated supprimé en v2 */
+export type QuestionStatus = 'approved'
 
 export type ItemRarity = 'common' | 'rare' | 'epic' | 'legendary'
 
@@ -146,49 +147,26 @@ export interface Module {
 
 export interface QuestionCategory {
   id: string
-  game_type: GameType
+  branch: string       // 'assurance' | 'fonds-mutuel'
   name: string
   icon: string | null
   color: string | null
-  is_active: boolean
-  order_index: number
   created_at: string
 }
 
 export interface Question {
   id: string
-  module_id: string
-  branch_id: string
-  question_text: string
-  context_text: string | null
-  icon: string
-  difficulty: 1 | 2 | 3
-  game_types: GameType[]
-  question_type: QuestionType
-  status: QuestionStatus
-  category_id: string | null
-  approved_by: string | null
-  approved_at: string | null
-  explanation: string
-  tip: string | null
-  tags: string[] | null
-  is_active: boolean
-  created_by: string | null
+  question: string
+  context: string | null
+  answers: string[]    // tableau de textes mélangés
+  correct_answer: string
+  branch: string       // 'assurance' | 'fonds-mutuel'
+  category: string
+  is_scenario: boolean
   created_at: string
-}
-
-export interface Answer {
-  id: string
-  question_id: string
-  answer_text: string
-  is_correct: boolean
-  order_index: number
-  /** Sorting: { correct_position: number } | Memory: { pair_id: string; side: 'term' | 'definition' } */
-  answer_metadata: Record<string, unknown> | null
-}
-
-export interface QuestionWithAnswers extends Question {
-  answers: Answer[]
+  updated_at: string | null
+  times_used: number
+  last_used_at: string | null
 }
 
 export interface GameSession {

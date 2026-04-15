@@ -3,26 +3,28 @@ import { supabaseAdmin } from '@/lib/supabase/server'
 import { verifyAccessToken } from '@/lib/auth'
 import { isGod, isModerator } from '@/lib/permissions'
 
-// PATCH — approve / reject / toggle / request_delete / cancel_delete / edit
+// PATCH — modifier une question (god only)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const token = request.cookies.get('amf_access')?.value
   if (!token) return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 })
+
   const payload = verifyAccessToken(token)
-  if (!payload || !isModerator(payload.role)) {
-    return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 })
+  if (!payload || !isGod(payload.role)) {
+    return NextResponse.json({ error: 'Seul le GOD peut modifier les questions.' }, { status: 403 })
   }
 
   const { id } = await params
+
   let body: {
-    action?: 'approve' | 'reject' | 'toggle' | 'request_delete' | 'cancel_delete' | 'edit'
-    question_text?: string
-    explanation?: string
-    tip?: string | null
-    difficulty?: 1 | 2 | 3
-    answers?: { answer_text: string; is_correct: boolean }[]
+    question?: string
+    context?: string | null
+    answers?: string[]
+    correct_answer?: string
+    category?: string
+    is_scenario?: boolean
   }
 
   try {
@@ -31,175 +33,97 @@ export async function PATCH(
     return NextResponse.json({ error: 'Corps de requête invalide.' }, { status: 400 })
   }
 
-  const { action } = body
+  const { question, context, answers, correct_answer, category, is_scenario } = body
 
-  // ── Approve / Reject ──────────────────────────────────────────
-  if (action === 'approve' || action === 'reject') {
-    const isApprove = action === 'approve'
-    const { error } = await supabaseAdmin
-      .from('questions')
-      .update({
-        status:      isApprove ? 'approved' : 'rejected',
-        is_active:   isApprove,
-        approved_by: isApprove ? payload.sub : null,
-        approved_at: isApprove ? new Date().toISOString() : null,
-      })
-      .eq('id', id)
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    await supabaseAdmin.from('admin_logs').insert({
-      admin_id: payload.sub,
-      action: `question_${action}`,
-      details: { question_id: id },
-    })
-
-    return NextResponse.json({ message: isApprove ? 'Question approuvée.' : 'Question rejetée.' })
+  if (question !== undefined && !question?.trim()) {
+    return NextResponse.json({ error: 'La question ne peut pas être vide.' }, { status: 400 })
   }
 
-  // ── Toggle active ─────────────────────────────────────────────
-  if (action === 'toggle') {
-    const { data: q } = await supabaseAdmin
-      .from('questions').select('is_active').eq('id', id).single()
-    if (!q) return NextResponse.json({ error: 'Question introuvable.' }, { status: 404 })
-
-    const nowActive = !q.is_active
-    const { error } = await supabaseAdmin
-      .from('questions')
-      .update({
-        is_active: nowActive,
-        status: nowActive ? 'approved' : 'rejected',
-        approved_by: nowActive ? payload.sub : null,
-        approved_at: nowActive ? new Date().toISOString() : null,
-      })
-      .eq('id', id)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    return NextResponse.json({ is_active: nowActive })
+  // Validation des réponses si fournies
+  if (answers !== undefined) {
+    const filled = answers.map(a => a?.trim()).filter(Boolean)
+    if (filled.length < 2) {
+      return NextResponse.json({ error: 'Au moins 2 réponses non-vides sont requises.' }, { status: 400 })
+    }
+    const ca = correct_answer?.trim()
+    if (!ca) {
+      return NextResponse.json({ error: 'La bonne réponse est obligatoire.' }, { status: 400 })
+    }
+    if (!filled.includes(ca)) {
+      return NextResponse.json({ error: 'La bonne réponse doit faire partie des réponses.' }, { status: 400 })
+    }
   }
 
-  // ── Request deletion — stored in admin_logs, no schema change needed ──
-  if (action === 'request_delete') {
-    // Check if already pending for this question
-    const { count: existing } = await supabaseAdmin
-      .from('admin_logs')
-      .select('*', { count: 'exact', head: true })
-      .eq('action', 'request_delete_question')
-      .contains('details', { question_id: id })
+  const update: Record<string, unknown> = {}
+  if (question     !== undefined) update.question     = question.trim()
+  if (context      !== undefined) update.context      = context?.trim() || null
+  if (answers      !== undefined) update.answers      = answers.map(a => a.trim()).filter(Boolean)
+  if (correct_answer !== undefined) update.correct_answer = correct_answer.trim()
+  if (category     !== undefined) update.category     = category.trim()
+  if (is_scenario  !== undefined) update.is_scenario  = is_scenario
 
-    if ((existing ?? 0) > 0) {
-      return NextResponse.json({ error: 'Une demande de suppression est déjà en cours.' }, { status: 409 })
-    }
-
-    const { error } = await supabaseAdmin.from('admin_logs').insert({
-      admin_id: payload.sub,
-      action: 'request_delete_question',
-      details: { question_id: id },
-    })
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    return NextResponse.json({ message: 'Demande de suppression envoyée au God Panel.' })
+  if (Object.keys(update).length === 0) {
+    return NextResponse.json({ error: 'Aucune modification fournie.' }, { status: 400 })
   }
 
-  // ── Cancel / deny deletion request ───────────────────────────
-  if (action === 'cancel_delete') {
-    // God can cancel any request; others only their own
-    let deleteQ = supabaseAdmin
-      .from('admin_logs')
-      .delete()
-      .eq('action', 'request_delete_question')
-      .contains('details', { question_id: id })
+  const { error } = await supabaseAdmin.from('questions').update(update).eq('id', id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    if (!isGod(payload.role)) {
-      deleteQ = deleteQ.eq('admin_id', payload.sub)
-    }
+  await supabaseAdmin.from('admin_logs').insert({
+    admin_id: payload.sub,
+    action: 'edit_question',
+    details: { question_id: id },
+  })
 
-    const { error } = await deleteQ
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    await supabaseAdmin.from('admin_logs').insert({
-      admin_id: payload.sub,
-      action: 'deny_delete_question',
-      details: { question_id: id },
-    })
-
-    return NextResponse.json({ message: 'Demande de suppression annulée.' })
-  }
-
-  // ── Edit question (god only) ──────────────────────────────────
-  if (action === 'edit') {
-    if (!isGod(payload.role)) {
-      return NextResponse.json({ error: 'Seul le GOD peut modifier les questions.' }, { status: 403 })
-    }
-
-    const { question_text, explanation, tip, difficulty, answers } = body
-
-    if (!question_text?.trim() || !explanation?.trim()) {
-      return NextResponse.json({ error: 'Question et explication requises.' }, { status: 400 })
-    }
-
-    const { error: updateErr } = await supabaseAdmin
-      .from('questions')
-      .update({
-        question_text: question_text.trim(),
-        explanation: explanation.trim(),
-        tip: tip?.trim() || null,
-        difficulty,
-      })
-      .eq('id', id)
-
-    if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
-
-    if (answers && answers.length >= 2) {
-      const filled = answers.filter(a => a.answer_text.trim())
-      if (filled.length < 2) {
-        return NextResponse.json({ error: 'Au moins 2 réponses requises.' }, { status: 400 })
-      }
-      await supabaseAdmin.from('answers').delete().eq('question_id', id)
-      const { error: ansErr } = await supabaseAdmin.from('answers').insert(
-        filled.map((a, i) => ({
-          question_id: id,
-          answer_text: a.answer_text.trim(),
-          is_correct: a.is_correct,
-          order_index: i,
-        }))
-      )
-      if (ansErr) return NextResponse.json({ error: ansErr.message }, { status: 500 })
-    }
-
-    await supabaseAdmin.from('admin_logs').insert({
-      admin_id: payload.sub,
-      action: 'edit_question',
-      details: { question_id: id },
-    })
-
-    return NextResponse.json({ message: 'Question modifiée.' })
-  }
-
-  return NextResponse.json({ error: 'Action inconnue.' }, { status: 400 })
+  return NextResponse.json({ message: 'Question modifiée.' })
 }
 
-// DELETE — hard delete (god only)
+// DELETE — supprimer une question (moderator: demande | god: direct)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const token = request.cookies.get('amf_access')?.value
   if (!token) return NextResponse.json({ error: 'Non authentifié.' }, { status: 401 })
+
   const payload = verifyAccessToken(token)
-  if (!payload || !isGod(payload.role)) {
-    return NextResponse.json({ error: 'Seul le GOD peut supprimer des questions.' }, { status: 403 })
+  if (!payload || !isModerator(payload.role)) {
+    return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 })
   }
 
   const { id } = await params
-  const { error } = await supabaseAdmin.from('questions').delete().eq('id', id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  await supabaseAdmin.from('admin_logs').insert({
+  if (isGod(payload.role)) {
+    // Suppression directe pour GOD
+    const { error } = await supabaseAdmin.from('questions').delete().eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    await supabaseAdmin.from('admin_logs').insert({
+      admin_id: payload.sub,
+      action: 'delete_question',
+      details: { question_id: id },
+    })
+
+    return NextResponse.json({ message: 'Question supprimée.' })
+  }
+
+  // Moderator: demande de suppression via admin_logs
+  const { count: existing } = await supabaseAdmin
+    .from('admin_logs')
+    .select('*', { count: 'exact', head: true })
+    .eq('action', 'request_delete_question')
+    .contains('details', { question_id: id })
+
+  if ((existing ?? 0) > 0) {
+    return NextResponse.json({ error: 'Une demande de suppression est déjà en cours.' }, { status: 409 })
+  }
+
+  const { error } = await supabaseAdmin.from('admin_logs').insert({
     admin_id: payload.sub,
-    action: 'delete_question',
+    action: 'request_delete_question',
     details: { question_id: id },
   })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  return NextResponse.json({ message: 'Question supprimée.' })
+  return NextResponse.json({ message: 'Demande de suppression envoyée.' })
 }

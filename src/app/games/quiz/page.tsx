@@ -10,11 +10,9 @@ import { useUIStore } from '@/stores/uiStore'
 import { playSound, type SoundType } from '@/lib/sound'
 import { Timer, Zap } from 'lucide-react'
 
-interface Answer { id: string; answer_text: string; is_correct: boolean }
 interface Question {
-  id: string; question_text: string; context_text: string | null
-  icon: string; difficulty: number; explanation: string; tip: string | null
-  answers: Answer[]
+  id: string; question: string; context: string | null
+  answers: string[]; correct_answer: string
 }
 
 type Phase = 'config' | 'playing' | 'result'
@@ -33,8 +31,7 @@ export default function QuizPage() {
   const [qIndex, setQIndex] = useState(0)
   const [timeLeft, setTimeLeft] = useState(20)
   const [answerState, setAnswerState] = useState<AnswerState>('idle')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [correctId, setCorrectId] = useState<string | null>(null)
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
   const [score, setScore] = useState(0)
   const [correct, setCorrect] = useState(0)
   const [streak, setStreak] = useState(0)
@@ -53,12 +50,12 @@ export default function QuizPage() {
   }, [])
 
   async function startGame() {
-    const res = await fetch(`/api/game/questions?game=quiz&count=10&difficulty=${difficulty}`)
+    const res = await fetch(`/api/game/questions?count=10`)
     const data = await res.json()
     if (!data.questions?.length) { alert('Aucune question disponible. Ajoute du contenu d\'abord.'); return }
     setQuestions(data.questions)
     setQIndex(0); setScore(0); setCorrect(0); setStreak(0); setBestStreak(0)
-    setTimeLeft(TIME_PER_Q[difficulty]); setAnswerState('idle'); setSelectedId(null); setCorrectId(null)
+    setTimeLeft(TIME_PER_Q[difficulty]); setAnswerState('idle'); setSelectedAnswer(null)
     startTimeRef.current = Date.now()
     setPhase('playing')
   }
@@ -71,20 +68,18 @@ export default function QuizPage() {
       } else {
         setQIndex(i => i + 1)
         setTimeLeft(TIME_PER_Q[difficulty])
-        setAnswerState('idle'); setSelectedId(null); setCorrectId(null)
+        setAnswerState('idle'); setSelectedAnswer(null)
       }
     }, 1400)
   }, [qIndex, questions.length, difficulty])
 
   const handleTimeout = useCallback(() => {
     if (answerState !== 'idle') return
-    const cAnswer = questions[qIndex]?.answers.find(a => a.is_correct)
-    setCorrectId(cAnswer?.id ?? null)
     setAnswerState('wrong')
     setStreak(0)
     if (soundOnWrong) playSound(soundOnWrong as SoundType)
     advanceQuestion()
-  }, [answerState, questions, qIndex, advanceQuestion, soundOnWrong])
+  }, [answerState, advanceQuestion, soundOnWrong])
 
   useEffect(() => {
     if (phase !== 'playing' || answerState !== 'idle') return
@@ -97,15 +92,14 @@ export default function QuizPage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [phase, qIndex, answerState, handleTimeout])
 
-  function handleAnswer(answer: Answer) {
+  function handleAnswer(answer: string) {
     if (answerState !== 'idle') return
     if (timerRef.current) clearInterval(timerRef.current)
 
-    setSelectedId(answer.id)
-    const cAnswer = questions[qIndex].answers.find(a => a.is_correct)
-    setCorrectId(cAnswer?.id ?? null)
+    setSelectedAnswer(answer)
+    const isCorrect = answer === questions[qIndex].correct_answer
 
-    if (answer.is_correct) {
+    if (isCorrect) {
       const timeBonus = Math.round((timeLeft / TIME_PER_Q[difficulty]) * 50)
       const streakBonus = streak >= 3 ? Math.round(streak * 5) : 0
       const pts = 100 + timeBonus + streakBonus
@@ -148,6 +142,9 @@ export default function QuizPage() {
   const timePct = (timeLeft / TIME_PER_Q[difficulty]) * 100
   const timerColor = timePct > 50 ? branchColor : timePct > 25 ? '#F59E0B' : '#FF4D6A'
 
+  void user
+  void totalTime
+
   return (
     <>
     {unlockedAchievements.length > 0 && (
@@ -162,7 +159,7 @@ export default function QuizPage() {
             <p className="text-gray-400 text-sm mb-8">10 questions chronométrées. Bonus de vitesse et de série.</p>
 
             <div className="mb-8">
-              <p className="text-gray-400 text-xs uppercase tracking-wider mb-3">Difficulté</p>
+              <p className="text-gray-400 text-xs uppercase tracking-wider mb-3">Vitesse</p>
               <div className="flex gap-3">
                 {([1, 2, 3] as const).map(d => (
                   <button key={d} onClick={() => setDifficulty(d)}
@@ -212,19 +209,19 @@ export default function QuizPage() {
 
           {/* Question card */}
           <div className="rpg-card p-6 mb-5">
-            {q.context_text && (
+            {q.context && (
               <div className="mb-4 p-3 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-sm italic">
-                {q.context_text}
+                {q.context}
               </div>
             )}
-            <p className="text-white text-lg font-medium leading-relaxed">{q.question_text}</p>
+            <p className="text-white text-lg font-medium leading-relaxed">{q.question}</p>
           </div>
 
           {/* Answers */}
           <div className="grid grid-cols-1 gap-3">
-            {q.answers.map(answer => {
-              const isSelected = selectedId === answer.id
-              const isCorrect = correctId === answer.id
+            {q.answers.map((answer, i) => {
+              const isSelected = selectedAnswer === answer
+              const isCorrect = q.correct_answer === answer
               const state = answerState !== 'idle'
                 ? isCorrect ? 'correct' : isSelected ? 'wrong' : 'dim'
                 : 'idle'
@@ -238,24 +235,16 @@ export default function QuizPage() {
               const s = styles[state]
 
               return (
-                <button key={answer.id} onClick={() => handleAnswer(answer)}
+                <button key={i} onClick={() => handleAnswer(answer)}
                   disabled={answerState !== 'idle'}
                   className="w-full text-left px-5 py-4 rounded-xl font-medium transition-all duration-200 disabled:cursor-default"
                   style={{ background: s.bg, border: `1px solid ${s.border}`, color: s.color }}>
                   {state === 'correct' && '✓ '}{state === 'wrong' && isSelected && '✗ '}
-                  {answer.answer_text}
+                  {answer}
                 </button>
               )
             })}
           </div>
-
-          {/* Explanation */}
-          {answerState !== 'idle' && (
-            <div className="mt-4 p-4 rounded-xl bg-white/5 border border-white/10 animate-slide-up">
-              <p className="text-gray-300 text-sm leading-relaxed">{q.explanation}</p>
-              {q.tip && <p className="text-[#D4A843] text-xs mt-2">💡 {q.tip}</p>}
-            </div>
-          )}
         </div>
       )}
 

@@ -42,3 +42,6 @@ next-env.d.ts
 
 # supabase — already applied, kept locally as reference
 supabase-*.sql
+
+# MCP config — contains secrets, never commit
+.mcp.json
